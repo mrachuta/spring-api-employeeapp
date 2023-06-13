@@ -20,7 +20,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import com.devopstraining.springapidemo.employeeapp.model.Employee;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = SpringapidemoApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = SpringEmployeeappApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class EmployeeControllerIntegrationTest {
      @Autowired
      private TestRestTemplate restTemplate;
