@@ -1,0 +1,135 @@
+def mvnc(Map config) {
+    configFileProvider([
+        configFile(
+            fileId: "${config.fileId}",
+            variable: 'MAVEN_SETTINGS_XML'
+        )
+    ])
+    {
+        sh("${config.cmd} -s $MAVEN_SETTINGS_XML")
+    }
+}
+
+def sonarQGStatus = 'UNKNOWN'
+
+pipeline {
+
+    agent {
+        label 'jenkins-agent-gcp'
+    }
+    tools {
+        maven 'maven_latest'
+    }
+    options {
+        buildDiscarder(
+            logRotator(numToKeepStr: '5')
+        )
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(
+            time: 1,
+            unit: 'HOURS'
+        )
+        durabilityHint('PERFORMANCE_OPTIMIZED')
+        ansiColor('xterm')
+    }
+    // environment {
+    //     // Install custom tool - Docker
+    //     // DOCKER_PATH = tool name: 'docker', type: 'com.cloudbees.jenkins.plugins.customtools.CustomTool'
+    //     TOMCAT_HOST = '192.168.56.2'
+    //     TOMCAT_PORT = '8005'
+    //     POSTGRES_USER = 'postgres'
+    //     POSTGRES_PASS = 'postgres'
+    //     POSTGRES_DB = 'postgres'
+    //     POSTGRES_HOST = 'postgres'
+    //     POSTGRES_PORT = '5432'
+    //     ENV_PROFILE = 'prod'
+    //     DOCKER_NETWORK_NAME = 'custompl0'
+    // }
+    // parameters {
+    //     booleanParam(
+    //         name: 'CLEAN_WS',
+    //         defaultValue: true,
+    //         description: 'Do you want to remove all previously created files?'
+    //     )
+    //     booleanParam(
+    //         name: 'RUN_TESTS',
+    //         defaultValue: true,
+    //         description: 'Do you want to run mvn test phase?'
+    //     )
+    //     booleanParam(
+    //         name: 'RUN_SONARQUBE',
+    //         defaultValue: true,
+    //         description: 'Do you want to perform Sonarqube analysis?'
+    //     )
+    //     booleanParam(
+    //         name: 'NEXUS_DEPLOY',
+    //         defaultValue: false,
+    //         description: 'Do you want to run mvn deploy phase?'
+    //     )
+    //     booleanParam(
+    //         name: 'TOMCAT_DEPLOY',
+    //         defaultValue: false,
+    //         description: 'Do you want to run deploy to Tomcat server?\n' +
+    //         'It can be performed only if all of above will finish with success.'
+    //     )
+    // }
+    stages {
+        stage('Compile project') {
+            steps {
+                mvnc(
+                    fileId: 'maven_default_settings_xml',
+                    cmd: 'mvn -U -B "-DskipTests=true" clean compile'
+                )
+            }
+        }
+        stage('Run tests') {
+            steps {
+                script {
+                    mvnc(
+                        fileId: 'maven_default_settings_xml',
+                        cmd: 'mvn -U -B clean post-integration-test'
+                    )
+                }
+                junit 'target/surefire-reports/*.xml'
+            }
+        }
+        stage('Sonarqube check') {
+            steps {
+                script {
+                    withSonarQubeEnv('sonarqube_default') {
+                        mvnc(
+                            fileId: 'maven_default_settings_xml',
+                            cmd: 'mvn -U -B -DskipTests=true -Dsonar.projectBranch=${GIT_BRANCH} sonar:sonar'
+                        )
+                    }
+                    // submitted SonarQube taskId is automatically attached to the pipeline context
+                }
+            }
+        }
+        stage('Sonarqube QG') {
+            steps {
+                script {
+                    timeout(time: 1, unit: 'HOURS') {
+                        def qg = waitForQualityGate()
+                            if (qg.status != 'OK') {
+                        error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                        }
+                    }
+                }
+            }
+        }
+        stage('Deploy artifact to Nexus3') {
+            steps {
+                mvnc(
+                    fileId: 'maven_default_settings_xml',
+                    cmd: 'mvn -U -B "-DskipTests=true" clean deploy'
+                )
+                archiveArtifacts(
+                    artifacts: 'target/*.jar, target/*.war',
+                    fingerprint: true
+                )
+            }
+        }
+    }
+}
