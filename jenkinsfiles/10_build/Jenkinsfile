@@ -15,7 +15,7 @@ def sonarQGStatus = 'UNKNOWN'
 pipeline {
 
     agent {
-        label 'jenkins-agent-gcp'
+        label 'jenkins'
     }
     tools {
         maven 'maven_latest'
@@ -79,7 +79,7 @@ pipeline {
             steps {
                 mvnc(
                     fileId: 'mvn_custom.xml',
-                    cmd: 'mvn -U -B "-DskipTests=true" clean compile'
+                    cmd: 'mvn -U -B "-DskipTests=true" compile'
                 )
             }
         }
@@ -88,7 +88,7 @@ pipeline {
                 script {
                     mvnc(
                         fileId: 'mvn_custom.xml',
-                        cmd: 'mvn -U -B clean post-integration-test'
+                        cmd: 'mvn -U -B test'
                     )
                 }
                 junit 'target/surefire-reports/*.xml'
@@ -123,7 +123,7 @@ pipeline {
             steps {
                 mvnc(
                     fileId: 'mvn_custom.xml',
-                    cmd: 'mvn -U -B "-DskipTests=true" clean deploy'
+                    cmd: 'mvn -U -B "-DskipTests=true" deploy'
                 )
                 archiveArtifacts(
                     artifacts: 'target/*.jar, target/*.war',
