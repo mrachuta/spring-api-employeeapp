@@ -1,0 +1,16 @@
+[Unit]
+Description=employeeapp Java app
+After=syslog.target network.target cloud-sql-proxy.service
+
+[Service]
+SuccessExitStatus=143
+User=employeeapp
+Group=employeeapp
+Type=simple
+
+ExecStartPre=/opt/employeeapp/pre-start.sh
+ExecStart=/opt/employeeapp/start-app.sh
+ExecStop=/bin/kill -15 $MAINPID
+
+[Install]
+WantedBy=multi-user.target
