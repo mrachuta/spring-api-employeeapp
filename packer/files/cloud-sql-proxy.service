@@ -1,0 +1,18 @@
+[Unit]
+Description=Cloud SQL Proxy service
+After=syslog.target network.target
+
+[Service]
+EnvironmentFile=/etc/systemd/system/cloud-sql-proxy.d/cloud-sql-proxy.conf
+User=root
+Group=root
+RemainAfterExit=yes
+Type=simple
+
+ExecStartPre=/bin/bash -c 'echo DB_STRING=$(/usr/bin/curl -H \'Metadata-Flavor: Google\' http://metadata.google.internal/computeMetadata/v1/instance/attributes/database_connection_string) > /etc/systemd/system/cloud-sql-proxy.d/cloud-sql-proxy.conf'
+ExecStart=/usr/bin/cloud-sql-proxy --private-ip --auto-iam-authn "${DB_STRING}"
+Restart=on-failure
+ExecStop=/bin/kill -15 $MAINPID
+
+[Install]
+WantedBy=multi-user.target
