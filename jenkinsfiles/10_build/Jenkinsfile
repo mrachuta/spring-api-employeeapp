@@ -78,7 +78,7 @@ pipeline {
         stage('Compile project') {
             steps {
                 mvnc(
-                    fileId: 'maven_default_settings_xml',
+                    fileId: 'mvn_custom.xml',
                     cmd: 'mvn -U -B "-DskipTests=true" clean compile'
                 )
             }
@@ -87,7 +87,7 @@ pipeline {
             steps {
                 script {
                     mvnc(
-                        fileId: 'maven_default_settings_xml',
+                        fileId: 'mvn_custom.xml',
                         cmd: 'mvn -U -B clean post-integration-test'
                     )
                 }
@@ -99,7 +99,7 @@ pipeline {
                 script {
                     withSonarQubeEnv('sonarqube_default') {
                         mvnc(
-                            fileId: 'maven_default_settings_xml',
+                            fileId: 'mvn_custom.xml',
                             cmd: 'mvn -U -B -DskipTests=true -Dsonar.projectBranch=${GIT_BRANCH} sonar:sonar'
                         )
                     }
@@ -122,7 +122,7 @@ pipeline {
         stage('Deploy artifact to Nexus3') {
             steps {
                 mvnc(
-                    fileId: 'maven_default_settings_xml',
+                    fileId: 'mvn_custom.xml',
                     cmd: 'mvn -U -B "-DskipTests=true" clean deploy'
                 )
                 archiveArtifacts(
