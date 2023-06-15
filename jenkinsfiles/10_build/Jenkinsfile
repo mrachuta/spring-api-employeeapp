@@ -13,7 +13,6 @@ def mvnc(Map config) {
 def sonarQGStatus = 'UNKNOWN'
 
 pipeline {
-
     agent {
         label 'jenkins'
     }
@@ -33,47 +32,13 @@ pipeline {
         durabilityHint('PERFORMANCE_OPTIMIZED')
         ansiColor('xterm')
     }
-    // environment {
-    //     // Install custom tool - Docker
-    //     // DOCKER_PATH = tool name: 'docker', type: 'com.cloudbees.jenkins.plugins.customtools.CustomTool'
-    //     TOMCAT_HOST = '192.168.56.2'
-    //     TOMCAT_PORT = '8005'
-    //     POSTGRES_USER = 'postgres'
-    //     POSTGRES_PASS = 'postgres'
-    //     POSTGRES_DB = 'postgres'
-    //     POSTGRES_HOST = 'postgres'
-    //     POSTGRES_PORT = '5432'
-    //     ENV_PROFILE = 'prod'
-    //     DOCKER_NETWORK_NAME = 'custompl0'
-    // }
-    // parameters {
-    //     booleanParam(
-    //         name: 'CLEAN_WS',
-    //         defaultValue: true,
-    //         description: 'Do you want to remove all previously created files?'
-    //     )
-    //     booleanParam(
-    //         name: 'RUN_TESTS',
-    //         defaultValue: true,
-    //         description: 'Do you want to run mvn test phase?'
-    //     )
-    //     booleanParam(
-    //         name: 'RUN_SONARQUBE',
-    //         defaultValue: true,
-    //         description: 'Do you want to perform Sonarqube analysis?'
-    //     )
-    //     booleanParam(
-    //         name: 'NEXUS_DEPLOY',
-    //         defaultValue: false,
-    //         description: 'Do you want to run mvn deploy phase?'
-    //     )
-    //     booleanParam(
-    //         name: 'TOMCAT_DEPLOY',
-    //         defaultValue: false,
-    //         description: 'Do you want to run deploy to Tomcat server?\n' +
-    //         'It can be performed only if all of above will finish with success.'
-    //     )
-    // }
+    parameters {
+        booleanParam(
+            name: 'NEXUS_DEPLOY',
+            defaultValue: false,
+            description: 'Do you want to run mvn deploy phase and deploy artifact to nexus?'
+        )
+    }
     stages {
         stage('Compile project') {
             steps {
@@ -120,6 +85,7 @@ pipeline {
             }
         }
         stage('Deploy artifact to Nexus3') {
+            when { expression { return params.NEXUS_DEPLOY } }
             steps {
                 mvnc(
                     fileId: 'mvn_custom.xml',
