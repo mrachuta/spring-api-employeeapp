@@ -20,6 +20,15 @@
 		<maven.compiler.source>17</maven.compiler.source>
 		<maven.compiler.target>17</maven.compiler.target>
 		<jacoco.execution.file>${project.build.directory}/coverage-reports/jacoco.exec</jacoco.execution.file>
+		<sonar.projectKey>spring-api-employeeapp</sonar.projectKey>
+		<sonar.projectName>EmployeeApp</sonar.projectName>
+		<sonar.projectVersion>1.0</sonar.projectVersion>
+		<sonar.language>java</sonar.language>
+		<sonar.sourceEncoding>UTF-8</sonar.sourceEncoding>
+		<sonar.core.codeCoveragePlugin>jacoco</sonar.core.codeCoveragePlugin>
+		<sonar.coverage.jacoco.xmlReportPaths>
+			${project.build.directory}/coverage-reports/jacoco/jacoco.xml
+  		</sonar.coverage.jacoco.xmlReportPaths>
 	</properties>
 
 	<dependencies>
