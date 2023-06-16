@@ -19,7 +19,17 @@ pipeline {
         string(
             name: 'TARGET_GCP_PROJECT',
             defaultValue: 'changeme',
-            description: 'Provide name of GCP project where image will be promoted'
+            description: 'Provide name of GCP project to make deployment'
+        )
+        string(
+            name: 'TF_CREDENTIALS',
+            defaultValue: 'gcp-terraform-sa-dev',
+            description: 'Provide name of credentials to use with terraform'
+        )
+        choice(
+            name: 'TF_ACTION',
+            choices: ['plan', 'apply', 'plan -destroy', 'destroy'],
+            description: 'Select terraform action to perform'    
         )
     }
     stages {
@@ -52,49 +62,23 @@ pipeline {
                 }
             }
         }
-        stage('Promote GCP Image') {
+        stage('Run terraform') {
             steps {
                 withCredentials([
                     file(
-                        credentialsId: 'gcp-terraform-sa-dev',
+                        credentialsId: env.TF_CREDENTIALS,
                         variable: 'GCP_CREDENTIALS'
                 )]) {
-                    script {
+                    dir("infra/env/${GCP_ENV_ALIAS}") {
                         sh '''
+                            # Just for verification
                             gcloud auth activate-service-account $GCP_TERRAFORM_SA --key-file=$GCP_CREDENTIALS
                             gcloud config set project $GCP_PROJECT
-                        '''
-                        imagesList = sh(
-                            script: '''
-                                gcloud compute images list --filter="family:${IMAGE_FAMILY}" \
-                                --format="value(name)"
-                            ''',
-                            returnStdout: true
-                        ).tokenize()
-                        timeout(time: 20, unit: 'MINUTES') {
-                            imageToPromote = input(
-                                message: "Select image to be promoted to project ${env.TARGET_GCP_PROJECT}",
-                                id: 'promotionInput',
-                                ok: 'Promote!',
-                                submitterParameter:'promotionApprovedBy',
-                                parameters: [
-                                    choice(
-                                        choices: imagesList,
-                                        description: "Select image to be promoted to project ${env.TARGET_GCP_PROJECT}",
-                                        name: 'imageName'
-                                    )
-                                ]
-                            )
-                        }
-                        env.IMAGE_TO_PROMOTE = imageToPromote.imageName
-                        echo "Image selected to promotion: ${env.IMAGE_TO_PROMOTE}"
-                        echo "Target project: ${env.TARGET_GCP_PROJECT}"
-                        sh '''
-                            gcloud compute --project=${TARGET_GCP_PROJECT} images create $IMAGE_TO_PROMOTE \
-                            --family=${IMAGE_FAMILY} \
-                            --source-image=${IMAGE_TO_PROMOTE} \
-                            --source-image-project=${GCP_PROJECT} \
-                            --storage-location=${IMAGE_LOCATION}
+                            export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
+                            export GOOGLE_PROJECT=$GCP_PROJECT
+                            export ENV_NAME=$GCP_ENV_ALIAS
+                            terraform init
+                            terraform $TF_ACTION
                         '''
                     }
                 }

@@ -71,12 +71,13 @@ pipeline {
                             gcpVar.split('=').last().replaceAll("^\"|^\'|\'\$|\"\$", "")
                         }
                         env.GCP_PROJECT = gcpVariables[0]
-                        env.GCP_PACKER_SA = gcpVariables[1]
-                        env.GCP_TERRAFORM_SA = gcpVariables[2]
-                        env.PROJECT_REGION = gcpVariables[3]
-                        env.PROJECT_ZONE = gcpVariables[4]
-                        env.IMAGE_FAMILY = gcpVariables[5]
-                        env.IMAGE_LOCATION = gcpVariables[6]
+                        env.GCP_ENV_ALIAS = gcpVariables[1]
+                        env.GCP_PACKER_SA = gcpVariables[2]
+                        env.GCP_TERRAFORM_SA = gcpVariables[3]
+                        env.PROJECT_REGION = gcpVariables[4]
+                        env.PROJECT_ZONE = gcpVariables[5]
+                        env.IMAGE_FAMILY = gcpVariables[6]
+                        env.IMAGE_LOCATION = gcpVariables[7]
                     }
                 }
             }
