@@ -9,7 +9,7 @@ packer {
 
 locals {
     image_timestamp = timestamp()
-    project_id = var.project_id
+    project_id      = var.project_id
 }
 
 source "googlecompute" "employeeapp-image" {

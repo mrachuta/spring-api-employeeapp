@@ -1,5 +1,3 @@
-nexusCredentials = 'technical-account-ldap'
-
 properties([
     parameters([
         [$class: 'ChoiceParameter',
@@ -74,6 +72,11 @@ pipeline {
                         }
                         env.GCP_PROJECT = gcpVariables[0]
                         env.GCP_PACKER_SA = gcpVariables[1]
+                        env.GCP_TERRAFORM_SA = gcpVariables[2]
+                        env.PROJECT_REGION = gcpVariables[3]
+                        env.PROJECT_ZONE = gcpVariables[4]
+                        env.IMAGE_FAMILY = gcpVariables[5]
+                        env.IMAGE_LOCATION = gcpVariables[6]
                     }
                 }
             }
@@ -83,7 +86,7 @@ pipeline {
                 script {
                     withCredentials([
                         usernamePassword(
-                            credentialsId: nexusCredentials,
+                            credentialsId: 'technical-account-ldap',
                             usernameVariable: 'NEXUS_USERNAME',
                             passwordVariable: 'NEXUS_PASSWORD')
                     ]) {
@@ -91,8 +94,8 @@ pipeline {
                         env.ARTIFACT_I = params.NEXUS_PACKAGE.split(' ')[1].trim()
                         env.ARTIFACT_V = params.NEXUS_PACKAGE.split(' ')[2].trim()
                         sh '''
-                            curl --create-dirs -O --output-dir target -k -X GET --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
-                            "https://nexus3.k8s.lan/service/rest/v1/search/assets/download?group=${ARTIFACT_G}&name=${ARTIFACT_I}&version=${ARTIFACT_V}&maven.extension=war&maven.classifier "
+                            curl -k -L --create-dirs --output-dir target -o "${ARTIFACT_I}.war" -X GET --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
+                            "https://nexus3.k8s.lan/service/rest/v1/search/assets/download?group=${ARTIFACT_G}&name=${ARTIFACT_I}&version=${ARTIFACT_V}&maven.extension=war&maven.classifier"
                         '''
                     }
                 }
@@ -105,13 +108,18 @@ pipeline {
                         credentialsId: 'gcp-packer-sa-dev',
                         variable: 'GCP_CREDENTIALS'
                 )]) {
-                    sh '''
-                        gcloud auth activate-service-account $GCP_PACKER_SA --key-file=$GCP_CREDENTIALS
-                        gcloud config set project $GCP_PROJECT
-                        export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
-                        export GOOGLE_PROJECT=$GCP_PROJECT
-                        packer build .
-                    '''
+                    dir('packer') {
+                        sh '''
+                            # Just for verification
+                            gcloud auth activate-service-account $GCP_PACKER_SA --key-file=$GCP_CREDENTIALS
+                            gcloud config set project $GCP_PROJECT
+                            export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
+                            export GOOGLE_PROJECT=$GCP_PROJECT
+                            packer init config.pkr.hcl
+                            export PKR_VAR_project_id=$GOOGLE_PROJECT
+                            packer build .
+                        '''
+                    }
                 }
             }
         }
