@@ -1,0 +1,124 @@
+nexusCredentials = 'technical-account-ldap'
+
+properties([
+    parameters([
+        [$class: 'ChoiceParameter',
+            choiceType: 'PT_SINGLE_SELECT',
+            description: 'Select package to create image',
+            name: 'NEXUS_PACKAGE',
+            script: [
+                $class: 'GroovyScript',
+                fallbackScript: [
+                    classpath: [],
+                    sandbox: false,
+                    script:
+                        "return 'Could not get packages from Nexus'"
+                ],
+                script: [
+                    classpath: [],
+                    sandbox: false,
+                    script:
+                    // Remove whitespaces and hidden chars
+                    '''
+                    import groovy.json.*
+
+                    nexusCredentials = 'technical-account-ldap'
+                    def PASSWORD = com.cloudbees.plugins.credentials.SystemCredentialsProvider.getInstance().getStore().getCredentials(com.cloudbees.plugins.credentials.domains.Domain.global()).find { it.getId().equals(nexusCredentials) }.getPassword()
+                    def USERNAME = com.cloudbees.plugins.credentials.SystemCredentialsProvider.getInstance().getStore().getCredentials(com.cloudbees.plugins.credentials.domains.Domain.global()).find { it.getId().equals(nexusCredentials) }.getUsername()
+                    def nexusUrl = 'https://nexus3.k8s.lan/service/rest/v1/search/assets?group=com.devopstraining.springapidemo&name=employeeapp&maven.extension=war&maven.classifier'
+                    def authDataEnc = "${USERNAME}:${PASSWORD}".bytes.encodeBase64()
+                    String json = new URL(nexusUrl).getText(requestProperties: ['Authorization': 'Basic ' + authDataEnc])
+                    def jsonSlupper = new JsonSlurper().parse(json.bytes)
+                    def packagesList = jsonSlupper["items"].collect { "${it['maven2']['groupId']} ${it['maven2']['artifactId']} ${it['maven2']['version']}" }
+                    return packagesList
+                    '''.stripIndent().trim()
+                ]
+            ]
+        ]
+    ])
+])
+
+pipeline {
+    agent {
+        label 'gcp'
+    }
+    options {
+        buildDiscarder(
+            logRotator(numToKeepStr: '5')
+        )
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(
+            time: 1,
+            unit: 'HOURS'
+        )
+        durabilityHint('PERFORMANCE_OPTIMIZED')
+        ansiColor('xterm')
+    }
+    stages {
+        stage('Prepare variables') {
+            steps {
+                script {
+                    echo "Git repo url: ${env.GIT_URL}"
+                    echo "Git branch: ${env.GIT_BRANCH}"
+                    echo 'Exposing gcp-specific env variables...'
+                    configFileProvider([
+                        configFile(
+                            fileId: 'gcp-config-dev',
+                            variable: 'GCP_CONFIGURATION'
+                        )
+                    ]) {
+                        // Split by each line, then split by '=' and remove quotes
+                        gcpVariables = readFile("${env.GCP_CONFIGURATION}").split('\n').collect { gcpVar ->
+                            gcpVar.split('=').last().replaceAll("^\"|^\'|\'\$|\"\$", "")
+                        }
+                        env.GCP_PROJECT = gcpVariables[0]
+                        env.GCP_PACKER_SA = gcpVariables[1]
+                    }
+                }
+            }
+        }
+        stage('Download package from Nexus') {
+            steps {
+                script {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: nexusCredentials,
+                            usernameVariable: 'NEXUS_USERNAME',
+                            passwordVariable: 'NEXUS_PASSWORD')
+                    ]) {
+                        env.ARTIFACT_G = params.NEXUS_PACKAGE.split(' ')[0].trim()
+                        env.ARTIFACT_I = params.NEXUS_PACKAGE.split(' ')[1].trim()
+                        env.ARTIFACT_V = params.NEXUS_PACKAGE.split(' ')[2].trim()
+                        sh '''
+                            curl --create-dirs -O --output-dir target -k -X GET --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
+                            "https://nexus3.k8s.lan/service/rest/v1/search/assets/download?group=${ARTIFACT_G}&name=${ARTIFACT_I}&version=${ARTIFACT_V}&maven.extension=war&maven.classifier "
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Create GCP image') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'gcp-packer-sa-dev',
+                        variable: 'GCP_CREDENTIALS'
+                )]) {
+                    sh '''
+                        gcloud auth activate-service-account $GCP_PACKER_SA --key-file=$GCP_CREDENTIALS
+                        gcloud config set project $GCP_PROJECT
+                        export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
+                        export GOOGLE_PROJECT=$GCP_PROJECT
+                        packer build .
+                    '''
+                }
+            }
+        }
+    }
+    post {
+        cleanup {
+            cleanWs()
+        }
+    }
+}
