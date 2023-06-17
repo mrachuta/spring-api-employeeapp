@@ -54,6 +54,10 @@ export GOOGLE_PROJECT=myproject
 ```
 
 # Usage
+Init packer:
+```
+packer init config.pkr.hcl
+```
 Build image:
 ```
 export PKR_VAR_project_id=$GOOGLE_PROJECT

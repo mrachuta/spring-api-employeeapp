@@ -1,0 +1,106 @@
+def mvnc(Map config) {
+    configFileProvider([
+        configFile(
+            fileId: "${config.fileId}",
+            variable: 'MAVEN_SETTINGS_XML'
+        )
+    ])
+    {
+        sh("${config.cmd} -s $MAVEN_SETTINGS_XML")
+    }
+}
+
+def sonarQGStatus = 'UNKNOWN'
+
+pipeline {
+    agent {
+        label 'jenkins'
+    }
+    tools {
+        maven 'maven_latest'
+    }
+    options {
+        buildDiscarder(
+            logRotator(numToKeepStr: '5')
+        )
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(
+            time: 1,
+            unit: 'HOURS'
+        )
+        durabilityHint('PERFORMANCE_OPTIMIZED')
+        ansiColor('xterm')
+    }
+    parameters {
+        booleanParam(
+            name: 'NEXUS_DEPLOY',
+            defaultValue: false,
+            description: 'Do you want to run mvn deploy phase and deploy artifact to nexus?'
+        )
+    }
+    stages {
+        stage('Compile project') {
+            steps {
+                mvnc(
+                    fileId: 'mvn_custom.xml',
+                    cmd: 'mvn -U -B "-DskipTests=true" compile'
+                )
+            }
+        }
+        stage('Run tests') {
+            steps {
+                script {
+                    mvnc(
+                        fileId: 'mvn_custom.xml',
+                        cmd: 'mvn -U -B test'
+                    )
+                }
+                junit 'target/surefire-reports/*.xml'
+            }
+        }
+        stage('Sonarqube check') {
+            steps {
+                script {
+                    withSonarQubeEnv('sonarqube_default') {
+                        mvnc(
+                            fileId: 'mvn_custom.xml',
+                            cmd: 'mvn -U -B -DskipTests=true -Dsonar.projectBranch=${GIT_BRANCH} sonar:sonar'
+                        )
+                    }
+                    // submitted SonarQube taskId is automatically attached to the pipeline context
+                }
+            }
+        }
+        stage('Sonarqube QG') {
+            steps {
+                script {
+                    timeout(time: 1, unit: 'HOURS') {
+                        def qg = waitForQualityGate()
+                            if (qg.status != 'OK') {
+                        error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                        }
+                    }
+                }
+            }
+        }
+        stage('Deploy artifact to Nexus3') {
+            when { expression { return params.NEXUS_DEPLOY } }
+            steps {
+                mvnc(
+                    fileId: 'mvn_custom.xml',
+                    cmd: 'mvn -U -B "-DskipTests=true" deploy'
+                )
+                archiveArtifacts(
+                    artifacts: 'target/*.jar, target/*.war',
+                    fingerprint: true
+                )
+            }
+        }
+    }
+    post {
+        cleanup {
+            cleanWs()
+        }
+    }
+}
