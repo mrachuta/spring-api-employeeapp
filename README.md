@@ -60,8 +60,8 @@ https://www.javaguides.net/2019/01/springboot-postgresql-jpa-hibernate-crud-rest
     ```
     mvn package
     ```
-2. Take a look at *packer/README.md*
-3. Take a look at *infra/README.md*
+2. For image creation process see following file [README.md](./packer/README.md)
+3. For infrastructure creation process see following file [README.md](./infra/README.md)
 
 ## Usage
 

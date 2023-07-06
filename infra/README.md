@@ -1,8 +1,14 @@
-# General info
+## Table of contents
+- [Table of contents](#table-of-contents)
+- [General info](#general-info)
+- [Requirements](#requirements)
+- [Usage](#usage)
+
+## General info
 
 Terraform configuration to create employeeapp stack in GCP
 
-# Requirements
+## Requirements
 
 * Service account to use with terraform already created in GCP and credentials in JSON file
 * employeeapp image available in GCP
@@ -48,7 +54,7 @@ gcloud secrets add-iam-policy-binding employeeapp-config \
 --role="roles/secretmanager.secretAccessor"
 ```
 
-# Usage
+## Usage
 
 Create resources:
 ```
@@ -58,3 +64,5 @@ Destroy resources:
 ```
 terraform destroy
 ```
+
+To deploy infrastructure using Jenkins, use *jenkinsfiles/50_deploy/Jenkinsfile* pipeline
