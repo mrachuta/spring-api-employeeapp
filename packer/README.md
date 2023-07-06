@@ -1,8 +1,14 @@
-# General info
+## Table of contents
+- [Table of contents](#table-of-contents)
+- [General info](#general-info)
+- [Requirements](#requirements)
+- [Usage](#usage)
+
+## General info
 
 Packer configuration to create employeeapp GCP image.
 
-# Requirements
+## Requirements
 * compute.googleapis.com service enabled
 ```
 gcloud enable services compute.googleapis.com
@@ -53,7 +59,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=./terraform-service-account-credentials.js
 export GOOGLE_PROJECT=myproject
 ```
 
-# Usage
+## Usage
 Init packer:
 ```
 packer init config.pkr.hcl
@@ -63,3 +69,4 @@ Build image:
 export PKR_VAR_project_id=$GOOGLE_PROJECT
 packer build .
 ```
+For create image using Jenkins, use *jenkinsfiles/30_create_image/Jenkinsfile* pipeline
