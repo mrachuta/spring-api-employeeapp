@@ -1,0 +1,93 @@
+pipeline {
+    agent {
+        label 'gcp'
+    }
+    options {
+        buildDiscarder(
+            logRotator(numToKeepStr: '5')
+        )
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(
+            time: 1,
+            unit: 'HOURS'
+        )
+        durabilityHint('PERFORMANCE_OPTIMIZED')
+        ansiColor('xterm')
+    }
+    parameters {
+        string(
+            name: 'TARGET_GCP_PROJECT',
+            defaultValue: 'changeme',
+            description: 'Provide name of GCP project to make deployment'
+        )
+        string(
+            name: 'TF_CREDENTIALS',
+            defaultValue: 'gcp-terraform-sa-dev',
+            description: 'Provide name of credentials to use with terraform'
+        )
+        choice(
+            name: 'TF_ACTION',
+            choices: ['plan', 'apply', 'plan -destroy', 'destroy'],
+            description: 'Select terraform action to perform'    
+        )
+    }
+    stages {
+        stage('Prepare variables') {
+            steps {
+                script {
+                    echo "Git repo url: ${env.GIT_URL}"
+                    echo "Git branch: ${env.GIT_BRANCH}"
+                    echo 'Exposing gcp-specific env variables...'
+                    configFileProvider([
+                        configFile(
+                            fileId: 'gcp-config-dev',
+                            variable: 'GCP_CONFIGURATION'
+                        )
+                    ]) {
+                        // Split by each line, then split by '=' and remove quotes
+                        gcpVariables = readFile("${env.GCP_CONFIGURATION}").split('\n').collect { gcpVar ->
+                            gcpVar.split('=').last().replaceAll("^\"|^\'|\'\$|\"\$", "")
+                        }
+                        env.GCP_PROJECT = gcpVariables[0]
+                        env.GCP_ENV_ALIAS = gcpVariables[1]
+                        env.GCP_PACKER_SA = gcpVariables[2]
+                        env.GCP_TERRAFORM_SA = gcpVariables[3]
+                        env.PROJECT_REGION = gcpVariables[4]
+                        env.PROJECT_ZONE = gcpVariables[5]
+                        env.IMAGE_FAMILY = gcpVariables[6]
+                        env.IMAGE_LOCATION = gcpVariables[7]
+
+                    }
+                }
+            }
+        }
+        stage('Run terraform') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: env.TF_CREDENTIALS,
+                        variable: 'GCP_CREDENTIALS'
+                )]) {
+                    dir("infra/env/${GCP_ENV_ALIAS}") {
+                        sh '''
+                            # Just for verification
+                            gcloud auth activate-service-account $GCP_TERRAFORM_SA --key-file=$GCP_CREDENTIALS
+                            gcloud config set project $GCP_PROJECT
+                            export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
+                            export GOOGLE_PROJECT=$GCP_PROJECT
+                            export ENV_NAME=$GCP_ENV_ALIAS
+                            terraform init
+                            terraform $TF_ACTION
+                        '''
+                    }
+                }
+            }
+        }
+    }
+    post {
+        cleanup {
+            cleanWs()
+        }
+    }
+}
