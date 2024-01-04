@@ -124,6 +124,21 @@ pipeline {
                 }
             }
         }
+        stage('SCA analysis of image') {
+            steps {
+                echo 'trivy as vmdk'
+            }
+        }
+        stage('Deploy to DEV') {
+            steps {
+                echo 'downstream pipeline'
+            }
+        }
+        stage('DAST scan') {
+            steps {
+                echo 'owasp zap'
+            }
+        }
     }
     post {
         cleanup {
