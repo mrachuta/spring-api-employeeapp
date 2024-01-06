@@ -1,16 +1,8 @@
 @Library('jenkins-shared-libs') _
 
-def privateRegistryAddress = 'nexus3.k8s.lan:50000'
-def privateRegistryAddressPull = 'nexus3.k8s.lan:50001'
-def sonarQgStatus = 'UNKNOWN'
-
 pipeline {
     agent {
         label 'jenkins'
-    }
-    // TODO: move to stage to avoid installation on all nodes
-    tools {
-        maven 'maven_latest'
     }
     options {
         buildDiscarder(
@@ -27,6 +19,12 @@ pipeline {
         // Added because of multiple agents
         skipDefaultCheckout()
     }
+    environment {
+        APP_NAME = 'EmployeeApp'
+        PRIVATE_REGISTRY_ADDRESS = 'nexus3.k8s.lan:50000'
+        PRIVATE_REGISTRY_ADDRESS_PULL = 'nexus3.k8s.lan:50001'
+    }
+    // TODO: Add more parameters to skip particular stages
     parameters {
         booleanParam(
             name: 'NEXUS_DEPLOY',
@@ -35,79 +33,98 @@ pipeline {
         )
     }
     stages {
-        stage('Clone repo') {
+        stage('Clone repo and prepare variables') {
             steps {
-                // Briliant hint: https://stackoverflow.com/a/48567672
                 script {
-                    scmVars = checkout scm
+                    // Invoke inside stage to avoid installation on all agents
+                    mavenHome = tool('maven_latest')
+                    // Briliant hint: https://stackoverflow.com/a/48567672
+                    scmVars = checkout(scm)
                     env.GIT_BRANCH = scmVars.GIT_BRANCH
                     env.GIT_URL = scmVars.GIT_URL
                     env.GIT_COMMIT = scmVars.GIT_COMMIT
+                    echo "Git repo url: ${env.GIT_URL}"
+                    echo "Git branch: ${env.GIT_BRANCH}"
+                    
                 }
             }
         }
         stage('Compile project') {
             steps {
-                runMaven(
-                    mavenConfigFileId: 'mvn_custom.xml',
-                    cmd: 'mvn -U -B -DskipTests=true compile'
-                )
+                withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                    runMaven(
+                        mavenConfigFileId: 'mvn_custom.xml',
+                        cmd: 'mvn -U -B -DskipTests=true compile'
+                    )
+                }
             }
         }
         stage('Run tests') {
             steps {
                 script {
-                    runMaven(
-                        mavenConfigFileId: 'mvn_custom.xml',
-                        cmd: 'mvn -U -B test'
-                    )
+                    withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                        runMaven(
+                            mavenConfigFileId: 'mvn_custom.xml',
+                            cmd: 'mvn -U -B test'
+                        )
+                    }
                 }
-                junit 'target/surefire-reports/*.xml'
+                junit(
+                    allowEmptyResults: true,
+                    skipMarkingBuildUnstable: false,
+                    skipPublishingChecks: true,
+                    testResults: 'target/surefire-reports/*.xml'
+                )
             }
         }
         stage('Sonarqube SAST analysis') {
             steps {
                 script {
-                    runSonarQubeAnalysis.maven(
-                        sonarQubeServerId: 'sonarqube_default',
-                        mavenConfigFileId: 'mvn_custom.xml',
-                        mavenSonarGoal: 'mvn -U -B -DskipTests=true -Dsonar.projectBranch=${GIT_BRANCH} sonar:sonar'
-                    )
+                    withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                        runSonarQubeAnalysis.maven(
+                            sonarQubeServerId: 'sonarqube_default',
+                            mavenConfigFileId: 'mvn_custom.xml',
+                            mavenSonarGoal: 'mvn -U -B -DskipTests=true -Dsonar.projectBranch=${GIT_BRANCH} sonar:sonar'
+                        )
+                    }
                     // submitted SonarQube taskId is automatically attached to the pipeline context
                     runSonarQubeAnalysis.checkQualityGateResult()
-                    stash 'wsAfterSq'
+                    stash(name: 'wsAfterSq')
                 }
             }
         }
         stage('Licenses compliance analysis') {
             agent {
                 kubernetes {
-                    inheritFrom 'default'
-                    yaml """
+                    inheritFrom('default')
+                    yaml("""
                     spec:
                       containers:
-                      - name: fossacli
-                        image: "${privateRegistryAddress}/fossa-cli:latest"
-                        command:
-                        - "sleep"
-                        args:
-                        - "999999"
-                    """
+                        - name: fossacli
+                          image: "${env.PRIVATE_REGISTRY_ADDRESS}/fossa-cli:latest"
+                          command:
+                            - "sleep"
+                          args:
+                            - "999999"
+                    """)
                 }
             }
             steps {
-                container('fossacli') {
-                    unstash 'wsAfterSq'
-                    withCredentials([string(credentialsId: 'fossa-api-key', variable: 'KEY')]) {
-                        // TODO: Add report generation and parse in Jenkins
+                container(name: 'fossacli') {
+                    unstash(name: 'wsAfterSq')
+                    withCredentials([
+                        string(credentialsId: 'fossa-api-key', variable: 'KEY')
+                    ]) {
+                        // TODO: create tool to convert json to junit XML ??
+                        // fossa-cli can't return automatically other code than 0 on error
                         sh('''
                             export FOSSA_API_KEY=$KEY
-                            fossa analyze --project EmployeeApp \
+                            fossa analyze --project $APP_NAME \
                             --revision $GIT_COMMIT \
                             --branch $GIT_BRANCH \
                             --project-url $GIT_URL \
                             --policy 'Single-Binary Distribution'
-                            fossa test --project EmployeeApp \
+                            fossa test --project $APP_NAME \
                             --revision $GIT_COMMIT \
                             --format json | tee -a fossa-result.json
                         ''')
@@ -117,36 +134,39 @@ pipeline {
         }
         stage('Create artifact') {
             steps {
-                runMaven(
-                    mavenConfigFileId: 'mvn_custom.xml',
-                    cmd: 'mvn -U -B -DskipTests=true package'
-                )
+                withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                    runMaven(
+                        mavenConfigFileId: 'mvn_custom.xml',
+                        cmd: 'mvn -U -B -DskipTests=true package'
+                    )
+                }
                 archiveArtifacts(
                     artifacts: 'target/*.jar, target/*.war',
                     fingerprint: true
                 )
-                stash 'wsAfterArtifact'
+                stash(name: 'wsAfterArtifact')
             }
         }
         stage('SCA analysis of artifact') {
             agent {
                 kubernetes {
-                    inheritFrom 'default'
-                    yaml """
+                    inheritFrom('default')
+                    yaml("""
                     spec:
                       containers:
-                      - name: trivy
-                        image: "${privateRegistryAddressPull}/aquasec/trivy:latest"
-                        command:
-                        - "sleep"
-                        args:
-                        - "999999"
-                    """
+                        - name: trivy
+                          image: "${env.PRIVATE_REGISTRY_ADDRESS_PULL}/aquasec/trivy:latest"
+                          command:
+                            - "sleep"
+                          args:
+                            - "999999"
+                    """)
                 }
             }
             steps {
-                container('trivy') {
-                    unstash 'wsAfterArtifact'
+                container(name: 'trivy') {
+                    unstash(name: 'wsAfterArtifact')
+                    // Intentionally skipped flag --exit-code to stop pipeline on scan failure
                     sh('''
                         trivy rootfs target/*.war \
                         --no-progress \
@@ -154,17 +174,24 @@ pipeline {
                         --format template --template "@/contrib/junit.tpl" \
                         -o trivy-junit-report.xml
                     ''')
-                    junit 'trivy-junit-report.xml'
+                    junit(
+                        allowEmptyResults: true,
+                        skipMarkingBuildUnstable: false,
+                        skipPublishingChecks: true,
+                        testResults: 'trivy-junit-report.xml'
+                    )
                 }
             }
         }
         stage('Deploy artifact to Nexus3') {
             when { expression { return params.NEXUS_DEPLOY } }
             steps {
-                runMaven(
-                    mavenConfigFileId: 'mvn_custom.xml',
-                    cmd: 'mvn -U -B -DskipTests=true deploy'
-                )
+                withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                    runMaven(
+                        mavenConfigFileId: 'mvn_custom.xml',
+                        cmd: 'mvn -U -B -DskipTests=true deploy'
+                    )
+                }
             }
         }
     }
