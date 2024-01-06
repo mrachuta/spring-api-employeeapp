@@ -26,6 +26,7 @@ gcloud services enable servicenetworking.googleapis.com
 gcloud services enable secretmanager.googleapis.com
 gcloud services enable sqladmin.googleapis.com
 gcloud services enable compute.googleapis.com
+gcloud services enable secretmanager.googleapis.com
 ```
 * Remote state bucket created:
 ```
@@ -34,7 +35,7 @@ gsutil mb -p $GOOGLE_PROJECT -s STANDARD -l us-central1 --pap enforced gs://terr
 * Service account for Nginx MIG created:
 ```
 gcloud iam service-accounts create ${ENV_NAME}-ea-nginx-sa \
---description="SA to use with employeeapp stack nginx instances" \f
+--description="SA to use with employeeapp stack nginx instances" \
 --display-name="${ENV_NAME}-ea-nginx-sa"
 ```
 * Service account for employeeapp MIG created:
