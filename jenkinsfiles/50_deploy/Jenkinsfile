@@ -65,16 +65,27 @@ pipeline {
                             ''')
                             if (env.TF_ACTION == 'apply') {
                                 sh('''
+                                    export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
+                                    export GOOGLE_PROJECT=$GCP_PROJECT
+                                    export ENV_NAME=$GCP_ENV_ALIAS
                                     terraform plan -out=tfplan -input=false
                                     terraform $TF_ACTION -input=false -auto-approve tfplan
                                 ''')
                             } else if (env.TF_ACTION == 'destroy') {
                                 sh('''
+                                    export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
+                                    export GOOGLE_PROJECT=$GCP_PROJECT
+                                    export ENV_NAME=$GCP_ENV_ALIAS
                                     terraform plan -destroy -out=tfplan -input=false
                                     terraform $TF_ACTION -input=false -auto-approve tfplan
                                 ''')
                             } else {
-                                sh('terraform $TF_ACTION -input=false')
+                                sh('''
+                                    export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
+                                    export GOOGLE_PROJECT=$GCP_PROJECT
+                                    export ENV_NAME=$GCP_ENV_ALIAS
+                                    terraform $TF_ACTION -input=false
+                                ''')
                             }
                         }
                     }
