@@ -15,7 +15,7 @@ terraform {
     prefix  = "terraform/state"
   }
 
-  required_version = ">= 1.6.5"
+  required_version = ">= 1.6.0"
 }
 
 # No credentials key; use GOOGLE_APPLICATION_CREDENTIALS env variable to config auth
