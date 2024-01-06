@@ -61,6 +61,7 @@ pipeline {
         APP_NAME = 'EmployeeApp'
         PRIVATE_REGISTRY_ADDRESS = 'nexus3.k8s.lan:50000'
         PRIVATE_REGISTRY_ADDRESS_PULL = 'nexus3.k8s.lan:50001'
+        GCP_DEV_CREDENTIALS = 'gcp-terraform-sa-dev'
     }
     stages {
         stage('Clone repo and prepare variables') {
@@ -87,7 +88,8 @@ pipeline {
                         usernamePassword(
                             credentialsId: 'technical-account-ldap',
                             usernameVariable: 'NEXUS_USERNAME',
-                            passwordVariable: 'NEXUS_PASSWORD')
+                            passwordVariable: 'NEXUS_PASSWORD'
+                        )
                     ]) {
                         env.ARTIFACT_G = params.NEXUS_PACKAGE.split(' ')[0].trim()
                         env.ARTIFACT_I = params.NEXUS_PACKAGE.split(' ')[1].trim()
@@ -106,14 +108,15 @@ pipeline {
                     file(
                         credentialsId: 'gcp-packer-sa-dev',
                         variable: 'GCP_CREDENTIALS'
-                )]) {
+                    )
+                ]) {
                     dir('packer') {
                         sh('''
                             export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
                             export GOOGLE_PROJECT=$GCP_PROJECT
                             packer init config.pkr.hcl
                             export PKR_VAR_project_id=$GOOGLE_PROJECT
-                            packer build .
+                            #packer build .
                         ''')
                     }
                 }
@@ -123,18 +126,19 @@ pipeline {
             steps {
                 withCredentials([
                     file(
-                        credentialsId: 'gcp-terraform-sa-dev',
+                        credentialsId: env.GCP_DEV_CREDENTIALS,
                         variable: 'GCP_CREDENTIALS'
-                )]) {
+                    )
+                ]) {
                     sh('''
                         #gcloud auth activate-service-account $GCP_TERRAFORM_SA --key-file=$GCP_CREDENTIALS
                         #gcloud config set project $GCP_PROJECT
                         #gsutil mb gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
                         #gcloud compute images export \
-                        #--destination-uri gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk \
-                        #--export-format=vmdk \
-                        #--image $(gcloud compute images describe-from-family \
-                        #--project $GCP_PROJECT $IMAGE_FAMILY --format="value(name)")
+                        --destination-uri gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk \
+                        --export-format=vmdk \
+                        --image $(gcloud compute images describe-from-family \
+                        --project $GCP_PROJECT $IMAGE_FAMILY --format="value(name)")
                         #gsutil cp gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk .
                         #gsutil rm -r gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
                     ''')
@@ -184,27 +188,40 @@ pipeline {
         stage('Deploy to DEV') {
             steps {
                 script {
+                    // Replace / in branch name to encoded value
                     gitBranchEnc = (env.GIT_BRANCH).replace("/", "%252F")
                     build(
                         job: "50_deploy_spring-api-employeeapp/${gitBranchEnc}",
                         wait: true,
                         parameters: [
-                            string(name: 'TARGET_GCP_PROJECT', value: "${env.GCP_PROJECT}"),
-                            string(name: 'TF_CREDENTIALS', value: 'gcp-terraform-sa-dev'),
+                            string(name: 'TARGET_GCP_PROJECT', value: env.GCP_PROJECT),
+                            string(name: 'TF_CREDENTIALS', value: env.GCP_DEV_CREDENTIALS),
                             string(name: 'TF_ACTION', value: 'apply')
                         ]
                     )
-                    dir("infra/env/${GCP_ENV_ALIAS}") {
-                        sh('''
-                            export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
-                            export GOOGLE_PROJECT=$GCP_PROJECT
-                            export ENV_NAME=$GCP_ENV_ALIAS
-                            terraform init
-                        ''')
-                        env.APP_URL = sh(
-                            script: 'terraform output -raw ext_lb_ip_output_clickable_https',
-                            returnStdout: true
+                    withCredentials([
+                        file(
+                            credentialsId: env.GCP_DEV_CREDENTIALS,
+                            variable: 'GCP_CREDENTIALS'
                         )
+                    ]) {
+                        dir("infra/env/${GCP_ENV_ALIAS}") {
+                            sh('''
+                                export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
+                                export GOOGLE_PROJECT=$GCP_PROJECT
+                                export ENV_NAME=$GCP_ENV_ALIAS
+                                terraform init
+                            ''')
+                            env.APP_URL = sh(
+                                script: '''
+                                    export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
+                                    export GOOGLE_PROJECT=$GCP_PROJECT
+                                    export ENV_NAME=$GCP_ENV_ALIAS
+                                    terraform output -raw ext_lb_ip_output_clickable_https
+                                ''',
+                                returnStdout: true
+                            )
+                        }
                     }
                 }
             }
