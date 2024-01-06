@@ -1,3 +1,5 @@
+@Library('jenkins-shared-libs') _
+
 pipeline {
     agent {
         label 'gcp'
@@ -29,26 +31,8 @@ pipeline {
                     echo "Git repo url: ${env.GIT_URL}"
                     echo "Git branch: ${env.GIT_BRANCH}"
                     echo 'Exposing gcp-specific env variables...'
-                    configFileProvider([
-                        configFile(
-                            fileId: 'gcp-config-dev',
-                            variable: 'GCP_CONFIGURATION'
-                        )
-                    ]) {
-                        // Split by each line, then split by '=' and remove quotes
-                        gcpVariables = readFile("${env.GCP_CONFIGURATION}").split('\n').collect { gcpVar ->
-                            gcpVar.split('=').last().replaceAll("^\"|^\'|\'\$|\"\$", "")
-                        }
-                        env.GCP_PROJECT = gcpVariables[0]
-                        env.GCP_ENV_ALIAS = gcpVariables[1]
-                        env.GCP_PACKER_SA = gcpVariables[2]
-                        env.GCP_TERRAFORM_SA = gcpVariables[3]
-                        env.PROJECT_REGION = gcpVariables[4]
-                        env.PROJECT_ZONE = gcpVariables[5]
-                        env.IMAGE_FAMILY = gcpVariables[6]
-                        env.IMAGE_LOCATION = gcpVariables[7]
-
-                    }
+                    // Exposing multiple variables like GCP_PROJECT etc.
+                    exposeVariablesFromConfigFile(configFileProviderFileId: 'gcp-config-dev')
                 }
             }
         }
@@ -58,7 +42,8 @@ pipeline {
                     file(
                         credentialsId: 'gcp-packer-sa-dev',
                         variable: 'GCP_CREDENTIALS'
-                )]) {
+                    )
+                ]) {
                     script {
                         sh '''
                             gcloud auth activate-service-account $GCP_PACKER_SA --key-file=$GCP_CREDENTIALS
