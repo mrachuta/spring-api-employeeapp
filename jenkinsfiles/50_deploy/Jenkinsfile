@@ -77,7 +77,7 @@ pipeline {
                                     export GOOGLE_PROJECT=$GCP_PROJECT
                                     export ENV_NAME=$GCP_ENV_ALIAS
                                     terraform plan -destroy -out=tfplan -input=false
-                                    terraform $TF_ACTION -input=false -auto-approve tfplan
+                                    terraform apply -input=false -auto-approve tfplan
                                 ''')
                             } else {
                                 sh('''
