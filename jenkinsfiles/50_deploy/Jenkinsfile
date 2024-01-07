@@ -49,6 +49,7 @@ pipeline {
         stage('Run terraform') {
             environment {
                 GCP_CREDENTIALS = credentials("$params.TF_CREDENTIALS")
+                GOOGLE_APPLICATION_CREDENTIALS = "$env.GCP_CREDENTIALS"
                 GOOGLE_PROJECT = "$env.GCP_PROJECT"
                 ENV_NAME = "$env.GCP_ENV_ALIAS"
             }

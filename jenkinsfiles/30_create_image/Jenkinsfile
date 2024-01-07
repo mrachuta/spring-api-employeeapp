@@ -62,6 +62,7 @@ pipeline {
         APP_NAME = 'EmployeeApp'
         PRIVATE_REGISTRY_ADDRESS = 'nexus3.k8s.lan:50000'
         PRIVATE_REGISTRY_ADDRESS_PULL = 'nexus3.k8s.lan:50001'
+        GCP_PACKER_CREDENTIALS = 'gcp-packer-sa-dev'
         GCP_DEV_CREDENTIALS = 'gcp-terraform-sa-dev'
     }
     stages {
@@ -104,46 +105,38 @@ pipeline {
             }
         }
         stage('Create GCP image') {
+            environment {
+                GCP_CREDENTIALS = credentials("$env.GCP_PACKER_CREDENTIALS")
+                GOOGLE_APPLICATION_CREDENTIALS = "$env.GCP_CREDENTIALS"
+                GOOGLE_PROJECT = "$env.GCP_PROJECT"
+            }
             steps {
-                withCredentials([
-                    file(
-                        credentialsId: 'gcp-packer-sa-dev',
-                        variable: 'GCP_CREDENTIALS'
-                    )
-                ]) {
-                    dir('packer') {
-                        sh('''
-                            export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
-                            export GOOGLE_PROJECT=$GCP_PROJECT
-                            packer init config.pkr.hcl
-                            export PKR_VAR_project_id=$GOOGLE_PROJECT
-                            #packer build .
-                        ''')
-                    }
+                dir('packer') {
+                    sh('''
+                        packer init config.pkr.hcl
+                        export PKR_VAR_project_id=$GOOGLE_PROJECT
+                        #packer build .
+                    ''')
                 }
             }
         }
         stage('Get image as VMDK') {
+            environment {
+                GCP_CREDENTIALS = credentials("$env.GCP_DEV_CREDENTIALS")
+            }
             steps {
-                withCredentials([
-                    file(
-                        credentialsId: env.GCP_DEV_CREDENTIALS,
-                        variable: 'GCP_CREDENTIALS'
-                    )
-                ]) {
-                    sh('''
-                        #gcloud auth activate-service-account $GCP_TERRAFORM_SA --key-file=$GCP_CREDENTIALS
-                        #gcloud config set project $GCP_PROJECT
-                        #gsutil mb gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
-                        #gcloud compute images export \
-                        --destination-uri gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk \
-                        --export-format=vmdk \
-                        --image $(gcloud compute images describe-from-family \
-                        --project $GCP_PROJECT $IMAGE_FAMILY --format="value(name)")
-                        #gsutil cp gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk .
-                        #gsutil rm -r gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
-                    ''')
-                }
+                sh('''
+                    #gcloud auth activate-service-account $GCP_TERRAFORM_SA --key-file=$GCP_CREDENTIALS
+                    #gcloud config set project $GCP_PROJECT
+                    #gsutil mb gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
+                    #gcloud compute images export \
+                    --destination-uri gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk \
+                    --export-format=vmdk \
+                    --image $(gcloud compute images describe-from-family \
+                    --project $GCP_PROJECT $IMAGE_FAMILY --format="value(name)")
+                    #gsutil cp gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk .
+                    #gsutil rm -r gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
+                ''')
                 stash(name: 'wsAfterImage')
             }
         }
@@ -187,6 +180,12 @@ pipeline {
             }
         }
         stage('Deploy to DEV') {
+            environment {
+                GCP_CREDENTIALS = credentials("$env.GCP_DEV_CREDENTIALS")
+                GOOGLE_APPLICATION_CREDENTIALS = "$env.GCP_CREDENTIALS"
+                GOOGLE_PROJECT = "$env.GCP_PROJECT"
+                ENV_NAME = "$env.GCP_ENV_ALIAS"
+            }
             steps {
                 script {
                     // Replace / in branch name to encoded value
@@ -200,29 +199,16 @@ pipeline {
                             string(name: 'TF_ACTION', value: 'apply')
                         ]
                     )
-                    withCredentials([
-                        file(
-                            credentialsId: env.GCP_DEV_CREDENTIALS,
-                            variable: 'GCP_CREDENTIALS'
+                    dir("infra/env/${GCP_ENV_ALIAS}") {
+                        sh('''
+                            terraform init
+                        ''')
+                        env.APP_URL = sh(
+                            script: '''
+                                terraform output -raw ext_lb_ip_output_clickable_https
+                            ''',
+                            returnStdout: true
                         )
-                    ]) {
-                        dir("infra/env/${GCP_ENV_ALIAS}") {
-                            sh('''
-                                export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
-                                export GOOGLE_PROJECT=$GCP_PROJECT
-                                export ENV_NAME=$GCP_ENV_ALIAS
-                                terraform init
-                            ''')
-                            env.APP_URL = sh(
-                                script: '''
-                                    export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
-                                    export GOOGLE_PROJECT=$GCP_PROJECT
-                                    export ENV_NAME=$GCP_ENV_ALIAS
-                                    terraform output -raw ext_lb_ip_output_clickable_https
-                                ''',
-                                returnStdout: true
-                            )
-                        }
                     }
                 }
             }
