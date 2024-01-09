@@ -23,13 +23,19 @@ properties([
                     import groovy.json.*
 
                     nexusCredentials = 'technical-account-ldap'
-                    def PASSWORD = com.cloudbees.plugins.credentials.SystemCredentialsProvider.getInstance().getStore().getCredentials(com.cloudbees.plugins.credentials.domains.Domain.global()).find { it.getId().equals(nexusCredentials) }.getPassword()
-                    def USERNAME = com.cloudbees.plugins.credentials.SystemCredentialsProvider.getInstance().getStore().getCredentials(com.cloudbees.plugins.credentials.domains.Domain.global()).find { it.getId().equals(nexusCredentials) }.getUsername()
-                    def nexusUrl = 'https://nexus3.k8s.lan/service/rest/v1/search/assets?group=com.devopstraining.springapidemo&name=employeeapp&maven.extension=war&maven.classifier'
+                    def jenkinsInst = com.cloudbees.plugins.credentials.SystemCredentialsProvider.getInstance()
+                    def globalDomain = com.cloudbees.plugins.credentials.domains.Domain.global()
+                    def globalDomainCreds = jenkinsInst.getStore().getCredentials(globalDomain)
+                    def PASSWORD = globalDomainCreds.find { it.getId().equals(nexusCredentials) }.getPassword()
+                    def USERNAME = globalDomainCreds.find { it.getId().equals(nexusCredentials) }.getUsername()
+                    def nexusUrl = 'https://nexus3.k8s.lan/service/rest/v1/search/assets' +
+                    '?group=com.devopstraining.springapidemo&name=employeeapp&maven.extension=war&maven.classifier'
                     def authDataEnc = "${USERNAME}:${PASSWORD}".bytes.encodeBase64()
                     String json = new URL(nexusUrl).getText(requestProperties: ['Authorization': 'Basic ' + authDataEnc])
                     def jsonSlupper = new JsonSlurper().parse(json.bytes)
-                    def packagesList = jsonSlupper["items"].collect { "${it['maven2']['groupId']} ${it['maven2']['artifactId']} ${it['maven2']['version']}" }
+                    def packagesList = jsonSlupper["items"].collect { 
+                        "${it['maven2']['groupId']} ${it['maven2']['artifactId']} ${it['maven2']['version']}" 
+                    }
                     // Sort hint from here: https://stackoverflow.com/a/20386474
                     return packagesList.sort(false).reverse()
                     '''.stripIndent().trim()
@@ -97,8 +103,11 @@ pipeline {
                         env.ARTIFACT_I = params.NEXUS_PACKAGE.split(' ')[1].trim()
                         env.ARTIFACT_V = params.NEXUS_PACKAGE.split(' ')[2].trim()
                         sh('''
-                            curl -k -L --create-dirs --output-dir target -o "${ARTIFACT_I}.war" -X GET --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
-                            "https://nexus3.k8s.lan/service/rest/v1/search/assets/download?group=${ARTIFACT_G}&name=${ARTIFACT_I}&version=${ARTIFACT_V}&maven.extension=war&maven.classifier"
+                            export ROOT_URL='https://nexus3.k8s.lan/service/rest/v1/search/assets/download?group='
+                            export EXT_AND_CLASSIFIER='&maven.extension=war&maven.classifier'
+                            curl -k -L --create-dirs --output-dir target -o "${ARTIFACT_I}.war" \
+                            -X GET --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
+                            "${ROOT_URL}${ARTIFACT_G}&name=${ARTIFACT_I}&version=${ARTIFACT_V}${EXT_AND_CLASSIFIER}"
                         ''')
                     }
                 }
@@ -115,7 +124,7 @@ pipeline {
                     sh('''
                         packer init config.pkr.hcl
                         export PKR_VAR_project_id=$GOOGLE_PROJECT
-                        #packer build .
+                        packer build .
                     ''')
                 }
             }
@@ -126,7 +135,8 @@ pipeline {
             }
             steps {
                 sh('''
-                    #gcloud auth activate-service-account $GCP_TERRAFORM_SA --key-file=$GCP_CREDENTIALS
+                    #gcloud auth activate-service-account $GCP_TERRAFORM_SA \
+                    --key-file=$GCP_CREDENTIALS
                     #gcloud config set project $GCP_PROJECT
                     #gsutil mb gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
                     #gcloud compute images export \
@@ -164,7 +174,7 @@ pipeline {
                     on GH: https://github.com/aquasecurity/trivy/discussions/5876
                     */
                     sh('''
-                        #trivy vm *.vmdk \
+                        trivy vm *.vmdk \
                         --no-progress \
                         --scanners vuln,secret,misconfig \
                         --format template --template "@/contrib/junit.tpl" \

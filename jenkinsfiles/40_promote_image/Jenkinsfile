@@ -46,7 +46,8 @@ pipeline {
                 ]) {
                     script {
                         sh('''
-                            gcloud auth activate-service-account $GCP_PACKER_SA --key-file=$GCP_CREDENTIALS
+                            gcloud auth activate-service-account $GCP_PACKER_SA \
+                            --key-file=$GCP_CREDENTIALS
                             gcloud config set project $GCP_PROJECT
                         ''')
                         imagesList = sh(
