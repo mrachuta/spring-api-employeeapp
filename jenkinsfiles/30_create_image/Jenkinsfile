@@ -129,25 +129,32 @@ pipeline {
                 }
             }
         }
+        /* 
+        Stages functionalities disabled because of missing support of Trivy for VMDK
+        images: https://github.com/aquasecurity/trivy/discussions/5876
+        */
         stage('Get image as VMDK') {
             environment {
                 GCP_CREDENTIALS = credentials("$env.GCP_DEV_CREDENTIALS")
             }
             steps {
+                echo 'Functionality not ready yet'
+                /*
                 sh('''
-                    #gcloud auth activate-service-account $GCP_TERRAFORM_SA \
+                    gcloud auth activate-service-account $GCP_TERRAFORM_SA \
                     --key-file=$GCP_CREDENTIALS
-                    #gcloud config set project $GCP_PROJECT
-                    #gsutil mb gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
-                    #gcloud compute images export \
+                    gcloud config set project $GCP_PROJECT
+                    gsutil mb gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
+                    gcloud compute images export \
                     --destination-uri gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk \
                     --export-format=vmdk \
                     --image $(gcloud compute images describe-from-family \
                     --project $GCP_PROJECT $IMAGE_FAMILY --format="value(name)")
-                    #gsutil cp gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk .
-                    #gsutil rm -r gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
+                    gsutil cp gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk .
+                    gsutil rm -r gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
                 ''')
                 stash(name: 'wsAfterImage')
+                */
             }
         }
         stage('SCA analysis of image') {
@@ -168,17 +175,15 @@ pipeline {
             }
             steps {
                 container(name: 'trivy') {
+                    echo 'Functionality not ready yet'
+                    /*
                     unstash(name: 'wsAfterImage')
-                    /* 
-                    || true added because of errors; created discussion
-                    on GH: https://github.com/aquasecurity/trivy/discussions/5876
-                    */
                     sh('''
                         trivy vm *.vmdk \
                         --no-progress \
                         --scanners vuln,secret,misconfig \
                         --format template --template "@/contrib/junit.tpl" \
-                        -o trivy-junit-report.xml || true
+                        -o trivy-junit-report.xml
                     ''')
                     junit(
                         allowEmptyResults: true,
@@ -186,9 +191,11 @@ pipeline {
                         skipPublishingChecks: true,
                         testResults: 'trivy-junit-report.xml'
                     )
+                    */
                 }
             }
         }
+        */
         stage('Deploy to DEV') {
             environment {
                 GCP_CREDENTIALS = credentials("$env.GCP_DEV_CREDENTIALS")
@@ -241,6 +248,7 @@ pipeline {
             }
             steps {
                 container(name: 'owaspzap') {
+                    // TODO: DAST cases
                     echo "hello from owasp zap container, let's test ${env.APP_URL}"
                 }
             }

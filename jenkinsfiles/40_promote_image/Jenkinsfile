@@ -50,13 +50,19 @@ pipeline {
                             --key-file=$GCP_CREDENTIALS
                             gcloud config set project $GCP_PROJECT
                         ''')
-                        imagesList = sh(
-                            script: '''
-                                gcloud compute images list --filter="family:${IMAGE_FAMILY}" \
-                                --format="value(name)"
-                            ''',
-                            returnStdout: true
-                        ).tokenize()
+                        try {
+                            imagesList = sh(
+                                script: '''
+                                    gcloud compute images list --filter="family:${IMAGE_FAMILY}" \
+                                    --format="value(name)"
+                                ''',
+                                returnStdout: true
+                            ).tokenize()
+                        } catch(Exception e) {
+                            error(
+                                "Are you sure that repository contains images matching following filter \"family:${env.IMAGE_FAMILY}\""
+                            )
+                        }
                         timeout(time: 20, unit: 'MINUTES') {
                             imageToPromote = input(
                                 message: "Select image to be promoted to project ${env.TARGET_GCP_PROJECT}",
