@@ -195,7 +195,6 @@ pipeline {
                 }
             }
         }
-        */
         stage('Deploy to DEV') {
             environment {
                 GCP_CREDENTIALS = credentials("$env.GCP_DEV_CREDENTIALS")
