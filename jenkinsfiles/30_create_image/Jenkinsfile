@@ -182,14 +182,17 @@ pipeline {
                         trivy vm *.vmdk \
                         --no-progress \
                         --scanners vuln,secret,misconfig \
-                        --format template --template "@/contrib/junit.tpl" \
-                        -o trivy-junit-report.xml
+                        --format json \
+                        -o trivy-sca-report.json
                     ''')
-                    junit(
-                        allowEmptyResults: true,
-                        skipMarkingBuildUnstable: false,
-                        skipPublishingChecks: true,
-                        testResults: 'trivy-junit-report.xml'
+                    recordIssues(
+                        tools: [
+                            trivy(
+                                name: 'Trivy SCA report (vmdk)',
+                                pattern: 'trivy-sca-report.json',
+                                skipSymbolicLinks: true
+                            )
+                        ]
                     )
                     */
                 }
@@ -236,7 +239,7 @@ pipeline {
                     yaml("""
                     spec:
                       containers:
-                        - name: trivy
+                        - name: owaspzap
                           image: "${env.PRIVATE_REGISTRY_ADDRESS_PULL}/owasp/zap2docker-stable:latest"
                           command:
                             - "sleep"
@@ -247,8 +250,21 @@ pipeline {
             }
             steps {
                 container(name: 'owaspzap') {
-                    // TODO: DAST cases
-                    echo "hello from owasp zap container, let's test ${env.APP_URL}"
+                    // Automation: https://www.jit.io/blog/how-to-automate-owasp-zap
+                    sh 'sed -i "s|##URLTOSCAN##|\$APP_URL|g" $WORKSPACE/owasp-zap-config.yaml'
+                    sh 'sed -i "s|##REPORTDIR##|\$WORKSPACE|g" $WORKSPACE/owasp-zap-config.yaml'
+                    sh 'sed -i "s|##REPORTNAME##|owasp-zap-report.json|g" $WORKSPACE/owasp-zap-config.yaml'
+                    sh 'zap.sh -cmd -addonupdate -silent'
+                    sh 'zap.sh -cmd -autorun $WORKSPACE/owasp-zap-config.yaml'
+                    recordIssues(
+                        tools: [
+                            sarif(
+                                name: 'OWASP ZAP DAST report',
+                                pattern: 'owasp-zap-report.json',
+                                skipSymbolicLinks: true
+                            )
+                        ]
+                    )
                 }
             }
         }
