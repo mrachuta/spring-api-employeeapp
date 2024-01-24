@@ -115,9 +115,12 @@ pipeline {
                     withCredentials([
                         string(credentialsId: 'fossa-api-key', variable: 'KEY')
                     ]) {
-                        // TODO: create tool to convert json to junit XML ??
-                        // fossa-cli can't return automatically other code than 0 on error
+                        /* 
+                        fossa-cli can't return automatically other
+                        code than 0 on scan result 'failure
+                        */
                         sh('''
+                            mkdir reports
                             export FOSSA_API_KEY=$KEY
                             fossa analyze --project $APP_NAME \
                             --revision $GIT_COMMIT \
@@ -127,8 +130,21 @@ pipeline {
                             fossa test --project $APP_NAME \
                             --revision $GIT_COMMIT \
                             --format json | tee -a fossa-result.json
+                            fossa report attribution \
+                            --project $APP_NAME \
+                            --revision $GIT_COMMIT \
+                            --format html > reports/fossa-report.html
                         ''')
                     }
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: false,
+                        keepAll: true,
+                        reportDir: './reports',
+                        reportFiles: 'fossa-report.html',
+                        reportName: 'Fossa License Report',
+                        useWrapperFileDirectly: true
+                    ])
                 }
             }
         }
@@ -171,14 +187,17 @@ pipeline {
                         trivy rootfs target/*.war \
                         --no-progress \
                         --scanners vuln,secret,misconfig \
-                        --format template --template "@/contrib/junit.tpl" \
-                        -o trivy-junit-report.xml
+                        --format json \
+                        -o trivy-sca-report.json
                     ''')
-                    junit(
-                        allowEmptyResults: true,
-                        skipMarkingBuildUnstable: false,
-                        skipPublishingChecks: true,
-                        testResults: 'trivy-junit-report.xml'
+                    recordIssues(
+                        tools: [
+                            trivy(
+                                name: 'Trivy SCA report (artifact)',
+                                pattern: 'trivy-sca-report.json',
+                                skipSymbolicLinks: true
+                            )
+                        ]
                     )
                 }
             }
