@@ -188,7 +188,7 @@ pipeline {
                     recordIssues(
                         tools: [
                             trivy(
-                                name: 'Trivy SCA report (vmdk)',
+                                name: 'Trivy SCA (vmdk)',
                                 pattern: 'trivy-sca-report.json',
                                 skipSymbolicLinks: true
                             )

@@ -113,7 +113,7 @@ pipeline {
                 container(name: 'fossacli') {
                     unstash(name: 'wsAfterSq')
                     withCredentials([
-                        string(credentialsId: 'fossa-api-key', variable: 'KEY')
+                        string(credentialsId: 'fossa-api-key', variable: 'FOSSA_API_KEY')
                     ]) {
                         /* 
                         fossa-cli can't return automatically other
@@ -121,15 +121,18 @@ pipeline {
                         */
                         sh('''
                             mkdir reports
-                            export FOSSA_API_KEY=$KEY
                             fossa analyze --project $APP_NAME \
                             --revision $GIT_COMMIT \
                             --branch $GIT_BRANCH \
                             --project-url $GIT_URL \
                             --policy 'Single-Binary Distribution'
+                        ''')
+                        sh('''
                             fossa test --project $APP_NAME \
                             --revision $GIT_COMMIT \
                             --format json | tee -a fossa-result.json
+                        ''')
+                        sh('''
                             fossa report attribution \
                             --project $APP_NAME \
                             --revision $GIT_COMMIT \
@@ -193,7 +196,7 @@ pipeline {
                     recordIssues(
                         tools: [
                             trivy(
-                                name: 'Trivy SCA report (artifact)',
+                                name: 'Trivy SCA (artifact)',
                                 pattern: 'trivy-sca-report.json',
                                 skipSymbolicLinks: true
                             )
