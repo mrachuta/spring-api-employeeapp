@@ -109,6 +109,7 @@ pipeline {
                             -X GET --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
                             "${ROOT_URL}${ARTIFACT_G}&name=${ARTIFACT_I}&version=${ARTIFACT_V}${EXT_AND_CLASSIFIER}"
                         ''')
+                        stash(name: 'wsAfterPackage')
                     }
                 }
             }
@@ -250,12 +251,19 @@ pipeline {
             }
             steps {
                 container(name: 'owaspzap') {
+                    unstash(name: 'wsAfterPackage')
+                    echo 'Wait for application to report HTTP 200 OK on main endpoint...'
+                    sh('''
+                        curl -k --retry-all-errors --retry 10 \
+                        --retry-delay 5 -s -o /dev/null \
+                        "$APP_URL/actuator/health"
+                    ''')
+                    sh('sed -i "s|##URLTOSCAN##|\$APP_URL|g" $WORKSPACE/owasp-zap-config.yaml')
+                    sh('sed -i "s|##REPORTDIR##|\$WORKSPACE|g" $WORKSPACE/owasp-zap-config.yaml')
+                    sh('sed -i "s|##REPORTNAME##|owasp-zap-report.json|g" $WORKSPACE/owasp-zap-config.yaml')
                     // Automation: https://www.jit.io/blog/how-to-automate-owasp-zap
-                    sh 'sed -i "s|##URLTOSCAN##|\$APP_URL|g" $WORKSPACE/owasp-zap-config.yaml'
-                    sh 'sed -i "s|##REPORTDIR##|\$WORKSPACE|g" $WORKSPACE/owasp-zap-config.yaml'
-                    sh 'sed -i "s|##REPORTNAME##|owasp-zap-report.json|g" $WORKSPACE/owasp-zap-config.yaml'
-                    sh 'zap.sh -cmd -addonupdate -silent'
-                    sh 'zap.sh -cmd -autorun $WORKSPACE/owasp-zap-config.yaml'
+                    sh('zap.sh -cmd -addonupdate -silent')
+                    sh('zap.sh -cmd -autorun $WORKSPACE/owasp-zap-config.yaml')
                     recordIssues(
                         tools: [
                             sarif(
