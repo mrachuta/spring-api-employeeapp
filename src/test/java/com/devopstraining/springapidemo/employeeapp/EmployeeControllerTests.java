@@ -38,6 +38,15 @@ public class EmployeeControllerTests {
      }
 
      @Test
+     public void testGetIndex() {
+     HttpHeaders headers = new HttpHeaders();
+        HttpEntity<String> entity = new HttpEntity<String>(null, headers);
+        ResponseEntity<String> response = restTemplate.exchange(getRootUrl() + "/",
+        HttpMethod.GET, entity, String.class);  
+        assertEquals(response.getStatusCode(), HttpStatus.OK);
+    }
+
+     @Test
      public void testGetAllEmployees() {
      HttpHeaders headers = new HttpHeaders();
         HttpEntity<String> entity = new HttpEntity<String>(null, headers);
