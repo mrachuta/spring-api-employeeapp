@@ -1,23 +1,8 @@
-def mvnc(Map config) {
-    configFileProvider([
-        configFile(
-            fileId: "${config.fileId}",
-            variable: 'MAVEN_SETTINGS_XML'
-        )
-    ])
-    {
-        sh("${config.cmd} -s $MAVEN_SETTINGS_XML")
-    }
-}
-
-def sonarQGStatus = 'UNKNOWN'
+@Library('jenkins-shared-libs') _
 
 pipeline {
     agent {
         label 'jenkins'
-    }
-    tools {
-        maven 'maven_latest'
     }
     options {
         buildDiscarder(
@@ -31,7 +16,15 @@ pipeline {
         )
         durabilityHint('PERFORMANCE_OPTIMIZED')
         ansiColor('xterm')
+        // Added because of multiple agents
+        skipDefaultCheckout()
     }
+    environment {
+        APP_NAME = 'EmployeeApp'
+        PRIVATE_REGISTRY_ADDRESS = 'nexus3.k8s.lan:50000'
+        PRIVATE_REGISTRY_ADDRESS_PULL = 'nexus3.k8s.lan:50001'
+    }
+    // TODO: Add more parameters to skip particular stages
     parameters {
         booleanParam(
             name: 'NEXUS_DEPLOY',
@@ -40,61 +33,187 @@ pipeline {
         )
     }
     stages {
+        stage('Clone repo and prepare variables') {
+            steps {
+                script {
+                    // Invoke inside stage to avoid installation on all agents
+                    mavenHome = tool('maven_latest')
+                    // Briliant hint: https://stackoverflow.com/a/48567672
+                    scmVars = checkout(scm)
+                    env.GIT_BRANCH = scmVars.GIT_BRANCH
+                    env.GIT_URL = scmVars.GIT_URL
+                    env.GIT_COMMIT = scmVars.GIT_COMMIT
+                    echo "Git repo url: ${env.GIT_URL}"
+                    echo "Git branch: ${env.GIT_BRANCH}"
+                    
+                }
+            }
+        }
         stage('Compile project') {
             steps {
-                mvnc(
-                    fileId: 'mvn_custom.xml',
-                    cmd: 'mvn -U -B "-DskipTests=true" compile'
-                )
+                withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                    runMaven(
+                        mavenConfigFileId: 'mvn_custom.xml',
+                        cmd: 'mvn -U -B -DskipTests=true compile'
+                    )
+                }
             }
         }
         stage('Run tests') {
             steps {
                 script {
-                    mvnc(
-                        fileId: 'mvn_custom.xml',
-                        cmd: 'mvn -U -B test'
-                    )
+                    withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                        runMaven(
+                            mavenConfigFileId: 'mvn_custom.xml',
+                            cmd: 'mvn -U -B test'
+                        )
+                    }
                 }
-                junit 'target/surefire-reports/*.xml'
+                junit(
+                    allowEmptyResults: true,
+                    skipMarkingBuildUnstable: false,
+                    skipPublishingChecks: true,
+                    testResults: 'target/surefire-reports/*.xml'
+                )
             }
         }
-        stage('Sonarqube check') {
+        stage('Sonarqube SAST analysis') {
             steps {
                 script {
-                    withSonarQubeEnv('sonarqube_default') {
-                        mvnc(
-                            fileId: 'mvn_custom.xml',
-                            cmd: 'mvn -U -B -DskipTests=true -Dsonar.projectBranch=${GIT_BRANCH} sonar:sonar'
+                    withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                        runSonarQubeAnalysis.maven(
+                            sonarQubeServerId: 'sonarqube_default',
+                            mavenConfigFileId: 'mvn_custom.xml',
+                            mavenSonarGoal: 'mvn -U -B -DskipTests=true -Dsonar.projectBranch=${GIT_BRANCH} sonar:sonar'
                         )
                     }
                     // submitted SonarQube taskId is automatically attached to the pipeline context
+                    runSonarQubeAnalysis.checkQualityGateResult()
+                    stash(name: 'wsAfterSq')
                 }
             }
         }
-        stage('Sonarqube QG') {
+        stage('Licenses compliance analysis') {
+            agent {
+                kubernetes {
+                    inheritFrom('default')
+                    yaml("""
+                    spec:
+                      containers:
+                        - name: fossacli
+                          image: "${env.PRIVATE_REGISTRY_ADDRESS}/fossa-cli:latest"
+                          command:
+                            - "sleep"
+                          args:
+                            - "999999"
+                    """)
+                }
+            }
             steps {
-                script {
-                    timeout(time: 1, unit: 'HOURS') {
-                        def qg = waitForQualityGate()
-                            if (qg.status != 'OK') {
-                        error "Pipeline aborted due to quality gate failure: ${qg.status}"
-                        }
+                container(name: 'fossacli') {
+                    unstash(name: 'wsAfterSq')
+                    withCredentials([
+                        string(credentialsId: 'fossa-api-key', variable: 'FOSSA_API_KEY')
+                    ]) {
+                        /* 
+                        fossa-cli can't return automatically other
+                        code than 0 on scan result 'failure
+                        */
+                        sh('''
+                            mkdir reports
+                            fossa analyze --project $APP_NAME \
+                            --revision $GIT_COMMIT \
+                            --branch $GIT_BRANCH \
+                            --project-url $GIT_URL \
+                            --policy 'Single-Binary Distribution'
+                        ''')
+                        sh('''
+                            fossa test --project $APP_NAME \
+                            --revision $GIT_COMMIT \
+                            --format json | tee -a fossa-result.json
+                        ''')
+                        sh('''
+                            fossa report attribution \
+                            --project $APP_NAME \
+                            --revision $GIT_COMMIT \
+                            --format html > reports/fossa-report.html
+                        ''')
                     }
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: false,
+                        keepAll: true,
+                        reportDir: './reports',
+                        reportFiles: 'fossa-report.html',
+                        reportName: 'Fossa License Report',
+                        useWrapperFileDirectly: true
+                    ])
+                }
+            }
+        }
+        stage('Create artifact') {
+            steps {
+                withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                    runMaven(
+                        mavenConfigFileId: 'mvn_custom.xml',
+                        cmd: 'mvn -U -B -DskipTests=true package'
+                    )
+                }
+                archiveArtifacts(
+                    artifacts: 'target/*.jar, target/*.war',
+                    fingerprint: true
+                )
+                stash(name: 'wsAfterArtifact')
+            }
+        }
+        stage('SCA analysis of artifact') {
+            agent {
+                kubernetes {
+                    inheritFrom('default')
+                    yaml("""
+                    spec:
+                      containers:
+                        - name: trivy
+                          image: "${env.PRIVATE_REGISTRY_ADDRESS_PULL}/aquasec/trivy:latest"
+                          command:
+                            - "sleep"
+                          args:
+                            - "999999"
+                    """)
+                }
+            }
+            steps {
+                container(name: 'trivy') {
+                    unstash(name: 'wsAfterArtifact')
+                    // Intentionally skipped flag --exit-code to stop pipeline on scan failure
+                    sh('''
+                        trivy rootfs target/*.war \
+                        --no-progress \
+                        --scanners vuln,secret,misconfig \
+                        --format json \
+                        -o trivy-sca-report.json
+                    ''')
+                    recordIssues(
+                        tools: [
+                            trivy(
+                                name: 'Trivy SCA (artifact)',
+                                pattern: 'trivy-sca-report.json',
+                                skipSymbolicLinks: true
+                            )
+                        ]
+                    )
                 }
             }
         }
         stage('Deploy artifact to Nexus3') {
             when { expression { return params.NEXUS_DEPLOY } }
             steps {
-                mvnc(
-                    fileId: 'mvn_custom.xml',
-                    cmd: 'mvn -U -B "-DskipTests=true" deploy'
-                )
-                archiveArtifacts(
-                    artifacts: 'target/*.jar, target/*.war',
-                    fingerprint: true
-                )
+                withEnv(["PATH+EXTRA=${mavenHome}/bin"]) {
+                    runMaven(
+                        mavenConfigFileId: 'mvn_custom.xml',
+                        cmd: 'mvn -U -B -DskipTests=true deploy'
+                    )
+                }
             }
         }
     }

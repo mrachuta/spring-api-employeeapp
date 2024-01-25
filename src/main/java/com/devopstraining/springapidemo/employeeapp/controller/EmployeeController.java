@@ -8,13 +8,13 @@ import javax.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.devopstraining.springapidemo.employeeapp.exception.ResourceNotFoundException;
@@ -22,34 +22,40 @@ import com.devopstraining.springapidemo.employeeapp.model.Employee;
 import com.devopstraining.springapidemo.employeeapp.repository.EmployeeRepository;
 
 @RestController
-@RequestMapping("/api/v1")
 public class EmployeeController {
+    static String notFoundMessage = "Employee with following id not found: ";
+    
     @Autowired
     private EmployeeRepository employeeRepository;
 
-    @GetMapping("/employees")
+    @GetMapping(path = "/", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String index() {
+		return "{\"message\": \"Welcome to EmployeeApp\"}";
+	}
+
+    @GetMapping(path = "/api/v1/employees", produces = MediaType.APPLICATION_JSON_VALUE)
     public List<Employee> getAllEmployees() {
         return employeeRepository.findAll();
     }
 
-    @GetMapping("/employees/{id}")
+    @GetMapping(path = "/api/v1/employees/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Employee> getEmployeeById(@PathVariable(value = "id") Long employeeId)
         throws ResourceNotFoundException {
         Employee employee = employeeRepository.findById(employeeId)
-          .orElseThrow(() -> new ResourceNotFoundException("Employee not found for this id :: " + employeeId));
+          .orElseThrow(() -> new ResourceNotFoundException(notFoundMessage + employeeId));
         return ResponseEntity.ok().body(employee);
     }
     
-    @PostMapping("/employees")
+    @PostMapping(path = "/api/v1/employees", produces = MediaType.APPLICATION_JSON_VALUE)
     public Employee createEmployee(@Valid @RequestBody Employee employee) {
         return employeeRepository.save(employee);
     }
 
-    @PutMapping("/employees/{id}")
+    @PutMapping(path = "/api/v1/employees/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Employee> updateEmployee(@PathVariable(value = "id") Long employeeId,
          @Valid @RequestBody Employee employeeDetails) throws ResourceNotFoundException {
         Employee employee = employeeRepository.findById(employeeId)
-        .orElseThrow(() -> new ResourceNotFoundException("Employee not found for this id :: " + employeeId));
+        .orElseThrow(() -> new ResourceNotFoundException(notFoundMessage + employeeId));
 
         employee.setEmailId(employeeDetails.getEmailId());
         employee.setLastName(employeeDetails.getLastName());
@@ -58,11 +64,11 @@ public class EmployeeController {
         return ResponseEntity.ok(updatedEmployee);
     }
 
-    @DeleteMapping("/employees/{id}")
+    @DeleteMapping(path = "/api/v1/employees/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Boolean> deleteEmployee(@PathVariable(value = "id") Long employeeId)
          throws ResourceNotFoundException {
         Employee employee = employeeRepository.findById(employeeId)
-       .orElseThrow(() -> new ResourceNotFoundException("Employee not found for this id :: " + employeeId));
+       .orElseThrow(() -> new ResourceNotFoundException(notFoundMessage + employeeId));
 
         employeeRepository.delete(employee);
         Map<String, Boolean> response = new HashMap<>();

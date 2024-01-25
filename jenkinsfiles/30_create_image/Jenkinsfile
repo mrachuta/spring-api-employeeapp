@@ -1,3 +1,5 @@
+@Library('jenkins-shared-libs') _
+
 properties([
     parameters([
         [$class: 'ChoiceParameter',
@@ -21,14 +23,21 @@ properties([
                     import groovy.json.*
 
                     nexusCredentials = 'technical-account-ldap'
-                    def PASSWORD = com.cloudbees.plugins.credentials.SystemCredentialsProvider.getInstance().getStore().getCredentials(com.cloudbees.plugins.credentials.domains.Domain.global()).find { it.getId().equals(nexusCredentials) }.getPassword()
-                    def USERNAME = com.cloudbees.plugins.credentials.SystemCredentialsProvider.getInstance().getStore().getCredentials(com.cloudbees.plugins.credentials.domains.Domain.global()).find { it.getId().equals(nexusCredentials) }.getUsername()
-                    def nexusUrl = 'https://nexus3.k8s.lan/service/rest/v1/search/assets?group=com.devopstraining.springapidemo&name=employeeapp&maven.extension=war&maven.classifier'
+                    def jenkinsInst = com.cloudbees.plugins.credentials.SystemCredentialsProvider.getInstance()
+                    def globalDomain = com.cloudbees.plugins.credentials.domains.Domain.global()
+                    def globalDomainCreds = jenkinsInst.getStore().getCredentials(globalDomain)
+                    def PASSWORD = globalDomainCreds.find { it.getId().equals(nexusCredentials) }.getPassword()
+                    def USERNAME = globalDomainCreds.find { it.getId().equals(nexusCredentials) }.getUsername()
+                    def nexusUrl = 'https://nexus3.k8s.lan/service/rest/v1/search/assets' +
+                    '?group=com.devopstraining.springapidemo&name=employeeapp&maven.extension=war&maven.classifier'
                     def authDataEnc = "${USERNAME}:${PASSWORD}".bytes.encodeBase64()
                     String json = new URL(nexusUrl).getText(requestProperties: ['Authorization': 'Basic ' + authDataEnc])
                     def jsonSlupper = new JsonSlurper().parse(json.bytes)
-                    def packagesList = jsonSlupper["items"].collect { "${it['maven2']['groupId']} ${it['maven2']['artifactId']} ${it['maven2']['version']}" }
-                    return packagesList
+                    def packagesList = jsonSlupper["items"].collect { 
+                        "${it['maven2']['groupId']} ${it['maven2']['artifactId']} ${it['maven2']['version']}" 
+                    }
+                    // Sort hint from here: https://stackoverflow.com/a/20386474
+                    return packagesList.sort(false).reverse()
                     '''.stripIndent().trim()
                 ]
             ]
@@ -52,33 +61,31 @@ pipeline {
         )
         durabilityHint('PERFORMANCE_OPTIMIZED')
         ansiColor('xterm')
+        // Added because of multiple agents
+        skipDefaultCheckout()
+    }
+    environment {
+        APP_NAME = 'EmployeeApp'
+        PRIVATE_REGISTRY_ADDRESS = 'nexus3.k8s.lan:50000'
+        PRIVATE_REGISTRY_ADDRESS_PULL = 'nexus3.k8s.lan:50001'
+        GCP_PACKER_CREDENTIALS = 'gcp-packer-sa-dev'
+        GCP_DEV_CREDENTIALS = 'gcp-terraform-sa-dev'
     }
     stages {
-        stage('Prepare variables') {
+        stage('Clone repo and prepare variables') {
             steps {
                 script {
+                    // Briliant hint: https://stackoverflow.com/a/48567672
+                    scmVars = checkout(scm)
+                    env.GIT_BRANCH = scmVars.GIT_BRANCH
+                    env.GIT_URL = scmVars.GIT_URL
+                    env.GIT_COMMIT = scmVars.GIT_COMMIT
                     echo "Git repo url: ${env.GIT_URL}"
                     echo "Git branch: ${env.GIT_BRANCH}"
                     echo 'Exposing gcp-specific env variables...'
-                    configFileProvider([
-                        configFile(
-                            fileId: 'gcp-config-dev',
-                            variable: 'GCP_CONFIGURATION'
-                        )
-                    ]) {
-                        // Split by each line, then split by '=' and remove quotes
-                        gcpVariables = readFile("${env.GCP_CONFIGURATION}").split('\n').collect { gcpVar ->
-                            gcpVar.split('=').last().replaceAll("^\"|^\'|\'\$|\"\$", "")
-                        }
-                        env.GCP_PROJECT = gcpVariables[0]
-                        env.GCP_ENV_ALIAS = gcpVariables[1]
-                        env.GCP_PACKER_SA = gcpVariables[2]
-                        env.GCP_TERRAFORM_SA = gcpVariables[3]
-                        env.PROJECT_REGION = gcpVariables[4]
-                        env.PROJECT_ZONE = gcpVariables[5]
-                        env.IMAGE_FAMILY = gcpVariables[6]
-                        env.IMAGE_LOCATION = gcpVariables[7]
-                    }
+                    // Exposing multiple variables like GCP_PROJECT etc.
+                    exposeVariablesFromConfigFile(configFileProviderFileId: 'gcp-config-dev')
+                    env.SHORT_JOB_ID = env.JOB_NAME.replaceAll("%2F|_|/", "-").take(45)
                 }
             }
         }
@@ -89,38 +96,183 @@ pipeline {
                         usernamePassword(
                             credentialsId: 'technical-account-ldap',
                             usernameVariable: 'NEXUS_USERNAME',
-                            passwordVariable: 'NEXUS_PASSWORD')
+                            passwordVariable: 'NEXUS_PASSWORD'
+                        )
                     ]) {
                         env.ARTIFACT_G = params.NEXUS_PACKAGE.split(' ')[0].trim()
                         env.ARTIFACT_I = params.NEXUS_PACKAGE.split(' ')[1].trim()
                         env.ARTIFACT_V = params.NEXUS_PACKAGE.split(' ')[2].trim()
-                        sh '''
-                            curl -k -L --create-dirs --output-dir target -o "${ARTIFACT_I}.war" -X GET --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
-                            "https://nexus3.k8s.lan/service/rest/v1/search/assets/download?group=${ARTIFACT_G}&name=${ARTIFACT_I}&version=${ARTIFACT_V}&maven.extension=war&maven.classifier"
-                        '''
+                        sh('''
+                            export ROOT_URL='https://nexus3.k8s.lan/service/rest/v1/search/assets/download?group='
+                            export EXT_AND_CLASSIFIER='&maven.extension=war&maven.classifier'
+                            curl -k -L --create-dirs --output-dir target -o "${ARTIFACT_I}.war" \
+                            -X GET --user "${NEXUS_USERNAME}:${NEXUS_PASSWORD}" \
+                            "${ROOT_URL}${ARTIFACT_G}&name=${ARTIFACT_I}&version=${ARTIFACT_V}${EXT_AND_CLASSIFIER}"
+                        ''')
+                        stash(name: 'wsAfterPackage')
                     }
                 }
             }
         }
         stage('Create GCP image') {
+            environment {
+                GCP_CREDENTIALS = credentials("$env.GCP_PACKER_CREDENTIALS")
+                GOOGLE_APPLICATION_CREDENTIALS = "$env.GCP_CREDENTIALS"
+                GOOGLE_PROJECT = "$env.GCP_PROJECT"
+            }
             steps {
-                withCredentials([
-                    file(
-                        credentialsId: 'gcp-packer-sa-dev',
-                        variable: 'GCP_CREDENTIALS'
-                )]) {
-                    dir('packer') {
-                        sh '''
-                            # Just for verification
-                            gcloud auth activate-service-account $GCP_PACKER_SA --key-file=$GCP_CREDENTIALS
-                            gcloud config set project $GCP_PROJECT
-                            export GOOGLE_APPLICATION_CREDENTIALS=$GCP_CREDENTIALS
-                            export GOOGLE_PROJECT=$GCP_PROJECT
-                            packer init config.pkr.hcl
-                            export PKR_VAR_project_id=$GOOGLE_PROJECT
-                            packer build .
-                        '''
+                dir('packer') {
+                    sh('''
+                        packer init config.pkr.hcl
+                        export PKR_VAR_project_id=$GOOGLE_PROJECT
+                        packer build .
+                    ''')
+                }
+            }
+        }
+        /* 
+        Stages functionalities disabled because of missing support of Trivy for VMDK
+        images: https://github.com/aquasecurity/trivy/discussions/5876
+        */
+        stage('Get image as VMDK') {
+            environment {
+                GCP_CREDENTIALS = credentials("$env.GCP_DEV_CREDENTIALS")
+            }
+            steps {
+                echo 'Functionality not ready yet'
+                /*
+                sh('''
+                    gcloud auth activate-service-account $GCP_TERRAFORM_SA \
+                    --key-file=$GCP_CREDENTIALS
+                    gcloud config set project $GCP_PROJECT
+                    gsutil mb gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
+                    gcloud compute images export \
+                    --destination-uri gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk \
+                    --export-format=vmdk \
+                    --image $(gcloud compute images describe-from-family \
+                    --project $GCP_PROJECT $IMAGE_FAMILY --format="value(name)")
+                    gsutil cp gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER/$APP_NAME-latest.vmdk .
+                    gsutil rm -r gs://tmp-$SHORT_JOB_ID-$BUILD_NUMBER
+                ''')
+                stash(name: 'wsAfterImage')
+                */
+            }
+        }
+        stage('SCA analysis of image') {
+            agent {
+                kubernetes {
+                    inheritFrom('default')
+                    yaml("""
+                    spec:
+                      containers:
+                        - name: trivy
+                          image: "${env.PRIVATE_REGISTRY_ADDRESS_PULL}/aquasec/trivy:latest"
+                          command:
+                            - "sleep"
+                          args:
+                            - "999999"
+                    """)
+                }
+            }
+            steps {
+                container(name: 'trivy') {
+                    echo 'Functionality not ready yet'
+                    /*
+                    unstash(name: 'wsAfterImage')
+                    sh('''
+                        trivy vm *.vmdk \
+                        --no-progress \
+                        --scanners vuln,secret,misconfig \
+                        --format json \
+                        -o trivy-sca-report.json
+                    ''')
+                    recordIssues(
+                        tools: [
+                            trivy(
+                                name: 'Trivy SCA (vmdk)',
+                                pattern: 'trivy-sca-report.json',
+                                skipSymbolicLinks: true
+                            )
+                        ]
+                    )
+                    */
+                }
+            }
+        }
+        stage('Deploy to DEV') {
+            environment {
+                GCP_CREDENTIALS = credentials("$env.GCP_DEV_CREDENTIALS")
+                GOOGLE_APPLICATION_CREDENTIALS = "$env.GCP_CREDENTIALS"
+                GOOGLE_PROJECT = "$env.GCP_PROJECT"
+                ENV_NAME = "$env.GCP_ENV_ALIAS"
+            }
+            steps {
+                script {
+                    // Replace / in branch name to encoded value
+                    gitBranchEnc = (env.GIT_BRANCH).replace("/", "%252F")
+                    build(
+                        job: "50_deploy_spring-api-employeeapp/${gitBranchEnc}",
+                        wait: true,
+                        parameters: [
+                            string(name: 'TARGET_GCP_PROJECT', value: env.GCP_PROJECT),
+                            string(name: 'TF_CREDENTIALS', value: env.GCP_DEV_CREDENTIALS),
+                            string(name: 'TF_ACTION', value: 'apply')
+                        ]
+                    )
+                    dir("infra/env/${GCP_ENV_ALIAS}") {
+                        sh('''
+                            terraform init
+                        ''')
+                        env.APP_URL = sh(
+                            script: '''
+                                terraform output -raw ext_lb_ip_output_clickable_https
+                            ''',
+                            returnStdout: true
+                        )
                     }
+                }
+            }
+        }
+        stage('DAST scan') {
+            agent {
+                kubernetes {
+                    inheritFrom('default')
+                    yaml("""
+                    spec:
+                      containers:
+                        - name: owaspzap
+                          image: "${env.PRIVATE_REGISTRY_ADDRESS_PULL}/owasp/zap2docker-stable:latest"
+                          command:
+                            - "sleep"
+                          args:
+                            - "999999"
+                    """)
+                }
+            }
+            steps {
+                container(name: 'owaspzap') {
+                    unstash(name: 'wsAfterPackage')
+                    echo 'Wait for application to report HTTP 200 OK on main endpoint...'
+                    sh('''
+                        curl -k --retry-all-errors --retry 10 \
+                        --retry-delay 5 -s -o /dev/null \
+                        "$APP_URL/actuator/health"
+                    ''')
+                    sh('sed -i "s|##URLTOSCAN##|\$APP_URL|g" $WORKSPACE/owasp-zap-config.yaml')
+                    sh('sed -i "s|##REPORTDIR##|\$WORKSPACE|g" $WORKSPACE/owasp-zap-config.yaml')
+                    sh('sed -i "s|##REPORTNAME##|owasp-zap-report.json|g" $WORKSPACE/owasp-zap-config.yaml')
+                    // Automation: https://www.jit.io/blog/how-to-automate-owasp-zap
+                    sh('zap.sh -cmd -addonupdate -silent')
+                    sh('zap.sh -cmd -autorun $WORKSPACE/owasp-zap-config.yaml')
+                    recordIssues(
+                        tools: [
+                            sarif(
+                                name: 'OWASP ZAP DAST report',
+                                pattern: 'owasp-zap-report.json',
+                                skipSymbolicLinks: true
+                            )
+                        ]
+                    )
                 }
             }
         }

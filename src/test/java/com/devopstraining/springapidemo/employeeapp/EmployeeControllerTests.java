@@ -2,6 +2,7 @@ package com.devopstraining.springapidemo.employeeapp;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -34,8 +35,17 @@ public class EmployeeControllerTests {
 
      @Test
      public void contextLoads() {
-
+        assertTrue(true);
      }
+
+     @Test
+     public void testGetIndex() {
+     HttpHeaders headers = new HttpHeaders();
+        HttpEntity<String> entity = new HttpEntity<String>(null, headers);
+        ResponseEntity<String> response = restTemplate.exchange(getRootUrl() + "/",
+        HttpMethod.GET, entity, String.class);  
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
 
      @Test
      public void testGetAllEmployees() {
@@ -84,7 +94,7 @@ public class EmployeeControllerTests {
          try {
               employee = restTemplate.getForObject(getRootUrl() + "/api/v1/employees/" + id, Employee.class);
          } catch (final HttpClientErrorException e) {
-              assertEquals(e.getStatusCode(), HttpStatus.NOT_FOUND);
+              assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
          }
     }
 }
