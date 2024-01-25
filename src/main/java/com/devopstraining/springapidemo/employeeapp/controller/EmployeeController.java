@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.devopstraining.springapidemo.employeeapp.exception.ResourceNotFoundException;
@@ -24,6 +23,8 @@ import com.devopstraining.springapidemo.employeeapp.repository.EmployeeRepositor
 
 @RestController
 public class EmployeeController {
+    static String notFoundMessage = "Employee with following id not found: ";
+    
     @Autowired
     private EmployeeRepository employeeRepository;
 
@@ -41,7 +42,7 @@ public class EmployeeController {
     public ResponseEntity<Employee> getEmployeeById(@PathVariable(value = "id") Long employeeId)
         throws ResourceNotFoundException {
         Employee employee = employeeRepository.findById(employeeId)
-          .orElseThrow(() -> new ResourceNotFoundException("Employee not found for this id :: " + employeeId));
+          .orElseThrow(() -> new ResourceNotFoundException(notFoundMessage + employeeId));
         return ResponseEntity.ok().body(employee);
     }
     
@@ -54,7 +55,7 @@ public class EmployeeController {
     public ResponseEntity<Employee> updateEmployee(@PathVariable(value = "id") Long employeeId,
          @Valid @RequestBody Employee employeeDetails) throws ResourceNotFoundException {
         Employee employee = employeeRepository.findById(employeeId)
-        .orElseThrow(() -> new ResourceNotFoundException("Employee not found for this id :: " + employeeId));
+        .orElseThrow(() -> new ResourceNotFoundException(notFoundMessage + employeeId));
 
         employee.setEmailId(employeeDetails.getEmailId());
         employee.setLastName(employeeDetails.getLastName());
@@ -67,7 +68,7 @@ public class EmployeeController {
     public Map<String, Boolean> deleteEmployee(@PathVariable(value = "id") Long employeeId)
          throws ResourceNotFoundException {
         Employee employee = employeeRepository.findById(employeeId)
-       .orElseThrow(() -> new ResourceNotFoundException("Employee not found for this id :: " + employeeId));
+       .orElseThrow(() -> new ResourceNotFoundException(notFoundMessage + employeeId));
 
         employeeRepository.delete(employee);
         Map<String, Boolean> response = new HashMap<>();
