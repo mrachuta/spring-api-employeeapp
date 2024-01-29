@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import com.devopstraining.springapidemo.employeeapp.model.Employee;
+import org.json.JSONObject;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -187,5 +188,36 @@ public class EmployeeControllerTests {
     } catch (final HttpClientErrorException e) {
       assertEquals(HttpStatus.NOT_FOUND, e.getStatusCode());
     }
+  }
+
+  @Test
+  public void testLGetInfoPage() {
+    HttpHeaders headers = new HttpHeaders();
+    HttpEntity<String> entity = new HttpEntity<String>(null, headers);
+    ResponseEntity<String> response =
+        restTemplate.exchange(getRootUrl() + "/info", HttpMethod.GET, entity, String.class);
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+  }
+
+  @Test
+  public void testMGetInfoPageDetails() {
+    HttpHeaders headers = new HttpHeaders();
+    HttpEntity<String> entity = new HttpEntity<String>(null, headers);
+    ResponseEntity<String> response =
+        restTemplate.exchange(getRootUrl() + "/info", HttpMethod.GET, entity, String.class);
+    String responseBody = response.getBody();
+    JSONObject jsonObject = new JSONObject(responseBody);
+    assertTrue(jsonObject.has("ipAddress"));
+    assertEquals("127.0.0.1", jsonObject.getString("ipAddress"));
+    assertTrue(jsonObject.has("userAgent"));
+    assertEquals(true, jsonObject.getString("userAgent").contains("Java"));
+    assertTrue(jsonObject.has("cookies"));
+    assertEquals("null", jsonObject.getString("cookies"));
+    assertTrue(jsonObject.has("method"));
+    assertEquals("GET", jsonObject.getString("method"));
+    assertTrue(jsonObject.has("protocol"));
+    assertEquals("HTTP/1.1", jsonObject.getString("protocol"));
+    assertTrue(jsonObject.has("characterEncoding"));
+    assertEquals("UTF-8", jsonObject.getString("characterEncoding"));
   }
 }
