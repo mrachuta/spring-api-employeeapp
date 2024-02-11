@@ -18,7 +18,7 @@ module "main" {
   db_deletion_protection             = false
   db_encryption                      = false
   db_enable_ssl                      = true
-  db_ssl_mode                        = "ENCRYPTED_ONLY"
+  db_ssl_mode                        = "ALLOW_UNENCRYPTED_AND_ENCRYPTED"
   #db_kms_key_path                   = ""
   bucket_name                        = "dev-ea-nginx-bucket"
   bucket_encryption                  = false
