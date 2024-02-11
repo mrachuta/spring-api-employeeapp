@@ -14,6 +14,8 @@ locals {
   db_deletion_protection            = var.db_deletion_protection
   db_encryption                     = var.db_encryption
   db_kms_key_path                   = var.db_kms_key_path
+  db_enable_ssl                     = var.db_enable_ssl
+  db_ssl_mode                       = var.db_ssl_mode
   bucket_name                       = var.bucket_name
   bucket_encryption                 = var.bucket_encryption
   bucket_kms_key_path               = var.bucket_kms_key_path
@@ -69,7 +71,7 @@ module "gcp_webserver_network_module" {
 }
 
 module "gcp_cloudsql_module" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-cloudsql-module?ref=v1.1.0"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-cloudsql-module?ref=feature/add-ssl-to-cloudsql-module"
 
   project_name           = local.project_name
   db_region              = local.project_region
@@ -78,6 +80,8 @@ module "gcp_cloudsql_module" {
   db_deletion_protection = local.db_deletion_protection
   db_encryption          = local.db_encryption
   db_kms_key_path        = local.db_kms_key_path
+  db_enable_ssl          = local.db_enable_ssl
+  db_ssl_mode            = local.db_ssl_mode
   network_name           = module.gcp_app_network_module.network_id_output
 
   db_names = {
@@ -155,7 +159,9 @@ module "gcp_webserver_mig" {
 
   # TODO: Update for custom.conf
   mig_startup_script = <<EOF
-    #!/bin/bash
+    #!/usr/bin/env bash
+
+    set -euo pipefail
 
     sudo apt -y update
     sudo apt -y install nginx
@@ -168,7 +174,7 @@ module "gcp_webserver_mig" {
     chown -R www-data:www-data /var/www/html/${module.gcp_webserver_bucket.site_name_output}
     chown www-data:www-data /etc/nginx/sites-available/custom.conf /etc/nginx/nginx.conf
     ssl_enabled=$(curl "http://metadata.google.internal/computeMetadata/v1/instance/attributes/ssl_enabled" -H "Metadata-Flavor: Google")
-    if [ "$ssl_enabled" == 'true' ]; then
+    if [[ "$ssl_enabled" == 'true' ]]; then
       echo 'ssl_enabled flag found...'
       mkdir /etc/ssl/${module.gcp_webserver_bucket.site_name_output}
       gsutil cp -R gs://${module.gcp_webserver_bucket.bucket_name_output}/*.{crt,key} /etc/ssl/${module.gcp_webserver_bucket.site_name_output}/
