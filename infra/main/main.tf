@@ -79,6 +79,7 @@ module "gcp_cloudsql_module" {
   db_deletion_protection = local.db_deletion_protection
   db_encryption          = local.db_encryption
   db_kms_key_path        = local.db_kms_key_path
+  db_enable_ssl          = local.db_enable_ssl
   db_ssl_mode            = local.db_ssl_mode
   network_name           = module.gcp_app_network_module.network_id_output
 
