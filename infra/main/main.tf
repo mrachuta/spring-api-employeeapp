@@ -168,7 +168,6 @@ module "gcp_webserver_mig" {
     nginx_bucket=$(curl "http://metadata.google.internal/computeMetadata/v1/instance/attributes/nginx_bucket_name" -H "Metadata-Flavor: Google")
     site_name=$(curl "http://metadata.google.internal/computeMetadata/v1/instance/attributes/nginx_bucket_name" -H "Metadata-Flavor: Google")
     mkdir /var/www/html/${module.gcp_webserver_bucket.site_name_output}
-    gsutil cp -R gs://${module.gcp_webserver_bucket.bucket_name_output}/*.{html,htm} /var/www/html/${module.gcp_webserver_bucket.site_name_output}/
     gsutil cp -R gs://${module.gcp_webserver_bucket.bucket_name_output}/custom.conf /etc/nginx/sites-available/custom.conf
     gsutil cp -R gs://${module.gcp_webserver_bucket.bucket_name_output}/nginx.conf /etc/nginx/nginx.conf
     chown -R www-data:www-data /var/www/html/${module.gcp_webserver_bucket.site_name_output}
