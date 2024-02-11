@@ -19,7 +19,6 @@ module "main" {
   db_deletion_protection             = false
   db_encryption                      = true
   db_kms_key_path                    = "projects/${data.google_client_config.this.project}/locations/us-central1/keyRings/prod/cryptoKeys/cloudSqlKey"
-  db_enable_ssl                      = true
   db_ssl_mode                        = "TRUSTED_CLIENT_CERTIFICATE_REQUIRED"
   bucket_name                        = "prod-ea-nginx-bucket"
   bucket_encryption                  = true
