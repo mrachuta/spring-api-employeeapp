@@ -14,6 +14,7 @@ locals {
   db_deletion_protection            = var.db_deletion_protection
   db_encryption                     = var.db_encryption
   db_kms_key_path                   = var.db_kms_key_path
+  db_enable_ssl                     = var.db_enable_ssl
   db_ssl_mode                       = var.db_ssl_mode
   bucket_name                       = var.bucket_name
   bucket_encryption                 = var.bucket_encryption
