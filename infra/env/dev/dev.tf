@@ -17,6 +17,8 @@ module "main" {
   db_instance_size                   = "db-g1-small"
   db_deletion_protection             = false
   db_encryption                      = false
+  db_enable_ssl                      = true
+  db_ssl_mode                        = "TRUSTED_CLIENT_CERTIFICATE_REQUIRED"
   #db_kms_key_path                   = ""
   bucket_name                        = "dev-ea-nginx-bucket"
   bucket_encryption                  = false
