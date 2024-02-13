@@ -69,7 +69,7 @@ module "gcp_webserver_network_module" {
 }
 
 module "gcp_cloudsql_module" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-cloudsql-module?ref=v1.1.0"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-cloudsql-module?ref=feature%2Fcloudsql-network-peering-removal-fix"
 
   project_name           = local.project_name
   db_region              = local.project_region
