@@ -7,7 +7,7 @@ required_version = ">= 1.3"
     }
     google-beta = {
       source  = "hashicorp/google-beta"
-      version = ">= 4.80.0"
+      version = "~>4"
     }
   }
 

@@ -51,7 +51,8 @@ Packer configuration to create employeeapp GCP image.
   gcloud compute routers nats create packer-network-router-nat \
   --region=us-central1 --router=packer-network-router \
   --auto-allocate-nat-external-ips \
-  --nat-custom-subnet-ip-ranges=packer-network-subnet-01
+  --nat-custom-subnet-ip-ranges=packer-network-subnet-01 \
+  --auto-network-tier=STANDARD
   ```
 * Credentials to packer service account in JSON format:
   ```
