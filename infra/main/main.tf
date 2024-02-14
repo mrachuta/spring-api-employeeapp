@@ -41,7 +41,7 @@ locals {
 }
 
 module "gcp_app_network_module" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-network-module?ref=v1.1.0"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-network-module?ref=v1.2.1"
 
   project_name  = local.project_name
   network_name  = local.app_network_name
@@ -55,7 +55,7 @@ module "gcp_app_network_module" {
 }
 
 module "gcp_webserver_network_module" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-network-module?ref=v1.1.0"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-network-module?ref=v1.2.1"
 
   project_name  = local.project_name
   network_name  = local.webserver_network_name
@@ -69,7 +69,7 @@ module "gcp_webserver_network_module" {
 }
 
 module "gcp_cloudsql_module" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-cloudsql-module?ref=feature%2Fcloudsql-network-peering-removal-fix"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-cloudsql-module?ref=v1.2.1"
 
   project_name           = local.project_name
   db_region              = local.project_region
@@ -93,7 +93,7 @@ module "gcp_cloudsql_module" {
 }
 
 module "gcp_webserver_bucket" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-webserver-bucket-module?ref=v1.1.0"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-webserver-bucket-module?ref=v1.2.1"
 
   bucket_name         = local.bucket_name
   bucket_region       = local.project_region
@@ -136,7 +136,7 @@ module "gcp_webserver_bucket" {
 }
 
 module "gcp_webserver_mig" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-mig-module?ref=v1.1.0"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-mig-module?ref=v1.2.1"
 
   project_name              = local.project_name
   mig_region                = local.project_region
@@ -193,7 +193,7 @@ module "gcp_webserver_mig" {
 }
 
 module "gcp_webserver_lb" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-tcp-loadbalancer-module?ref=v1.1.0"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-tcp-loadbalancer-module?ref=v1.2.1"
 
   lb_region    = local.project_region
   lb_name      = local.ext_lb_name
@@ -205,7 +205,7 @@ module "gcp_webserver_lb" {
 }
 
 module "gcp_app_mig" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-mig-module?ref=v1.1.0"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-mig-module?ref=v1.2.1"
 
   project_name              = local.project_name
   mig_region                = local.project_region
@@ -239,7 +239,7 @@ module "gcp_app_mig" {
 }
 
 module "gcp_app_lb" {
-  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-tcp-loadbalancer-module?ref=v1.1.0"
+  source = "github.com/mrachuta/terraform-resources.git//modules/gcp-tcp-loadbalancer-module?ref=v1.2.1"
 
   lb_region            = local.project_region
   lb_name              = local.int_lb_name
