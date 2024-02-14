@@ -6,6 +6,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 class SpringEmployeeappApplicationTests {
 
-  @Test
+  // Hint from https://stackoverflow.com/a/62747586
+  @Test(expected = Test.None.class)
   void contextLoads() {}
 }

@@ -25,6 +25,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @RestController
 public class EmployeeController {
   static String notFoundMessage = "Employee with following id not found: ";
+  static String notAvailableMessage = "Not available";
 
   @Autowired private EmployeeRepository employeeRepository;
 
@@ -37,14 +38,14 @@ public class EmployeeController {
   @GetMapping(path = "/info", produces = MediaType.APPLICATION_JSON_VALUE)
   public String info() {
     // Extracting general request information
-    String ipAddress = "Not available";
-    String userAgent = "Not available";
-    String acceptLanguage = "Not available";
+    String ipAddress = notAvailableMessage;
+    String userAgent = notAvailableMessage;
+    String acceptLanguage = notAvailableMessage;
 
     // Extracting connection details
-    String method = "Not available";
-    String protocol = "Not available";
-    String serverName = "Not available";
+    String method = notAvailableMessage;
+    String protocol = notAvailableMessage;
+    String serverName = notAvailableMessage;
     int serverPort = -1;
 
     // Extracting date and time
@@ -53,8 +54,8 @@ public class EmployeeController {
     String formattedDateTime = now.format(formatter);
 
     // Extracting request details
-    String characterEncoding = "Not available";
-    String cookies = "Not available";
+    String characterEncoding = notAvailableMessage;
+    String cookies = notAvailableMessage;
 
     // Try to obtain the HttpServletRequest
     ServletRequestAttributes attributes =
@@ -74,23 +75,20 @@ public class EmployeeController {
     }
 
     // Construct the JSON response
-    String jsonResponse =
-        String.format(
-            "{\"ipAddress\": \"%s\", \"userAgent\": \"%s\", \"acceptLanguage\": \"%s\", \"method\":"
-                + " \"%s\", \"protocol\": \"%s\", \"serverName\": \"%s\", \"serverPort\": %d,"
-                + " \"dateTime\": \"%s\", \"characterEncoding\": \"%s\", \"cookies\": \"%s\"}",
-            ipAddress,
-            userAgent,
-            acceptLanguage,
-            method,
-            protocol,
-            serverName,
-            serverPort,
-            formattedDateTime,
-            characterEncoding,
-            cookies);
-
-    return jsonResponse;
+    return String.format(
+        "{\"ipAddress\": \"%s\", \"userAgent\": \"%s\", \"acceptLanguage\": \"%s\", \"method\":"
+            + " \"%s\", \"protocol\": \"%s\", \"serverName\": \"%s\", \"serverPort\": %d,"
+            + " \"dateTime\": \"%s\", \"characterEncoding\": \"%s\", \"cookies\": \"%s\"}",
+        ipAddress,
+        userAgent,
+        acceptLanguage,
+        method,
+        protocol,
+        serverName,
+        serverPort,
+        formattedDateTime,
+        characterEncoding,
+        cookies);
   }
 
   @GetMapping(path = "/api/v1/employees", produces = MediaType.APPLICATION_JSON_VALUE)
