@@ -54,8 +54,8 @@ public class EmployeeController {
     String formattedDateTime = now.format(formatter);
 
     // Extracting request details
-    String characterEncoding = "Not available";
-    String cookies = "Not available";
+    String characterEncoding = notAvailableMessage;
+    String cookies = notAvailableMessage;
 
     // Try to obtain the HttpServletRequest
     ServletRequestAttributes attributes =
