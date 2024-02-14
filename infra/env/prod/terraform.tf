@@ -1,4 +1,5 @@
 terraform {
+required_version = ">= 1.3"
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -14,8 +15,6 @@ terraform {
     bucket  = "terraform-prod-ea-state"
     prefix  = "terraform/state"
   }
-
-  required_version = ">= 1.6.0"
 }
 
 # No credentials key; use GOOGLE_APPLICATION_CREDENTIALS env variable to config auth
