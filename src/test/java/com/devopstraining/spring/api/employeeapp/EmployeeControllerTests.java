@@ -1,10 +1,10 @@
-package com.devopstraining.springapidemo.employeeapp;
+package com.devopstraining.spring.api.employeeapp;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import com.devopstraining.springapidemo.employeeapp.model.Employee;
+import com.devopstraining.spring.api.employeeapp.model.Employee;
 import org.json.JSONObject;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -24,7 +24,7 @@ import org.springframework.web.client.HttpClientErrorException;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest(
-    classes = SpringEmployeeappApplication.class,
+    classes = EmployeeappApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class EmployeeControllerTests {

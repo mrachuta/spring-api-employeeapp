@@ -1,4 +1,4 @@
-package com.devopstraining.springapidemo.employeeapp;
+package com.devopstraining.spring.api.employeeapp;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -10,9 +10,9 @@ https://stackoverflow.com/a/45593022
 */
 
 @SpringBootApplication
-public class SpringEmployeeappApplication extends SpringBootServletInitializer {
+public class EmployeeappApplication extends SpringBootServletInitializer {
 
   public static void main(String[] args) {
-    SpringApplication.run(SpringEmployeeappApplication.class, args);
+    SpringApplication.run(EmployeeappApplication.class, args);
   }
 }
