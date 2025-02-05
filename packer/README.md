@@ -54,7 +54,7 @@ Packer configuration to create employeeapp GCP image.
   --nat-custom-subnet-ip-ranges=packer-network-subnet-01 \
   --auto-network-tier=STANDARD
   ```
-* Credentials to packer service account in JSON format:
+* Credentials to packer service account in JSON format downloaded:
   ```
   gcloud iam service-accounts keys create packer-sa-${GOOGLE_PROJECT}.json --iam-account packer-sa@${GOOGLE_PROJECT}.iam.gserviceaccount.com
   ```

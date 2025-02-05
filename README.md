@@ -1,5 +1,5 @@
 ## Project name
-spring-api-employeapp - example Spring Boot API application with CI/CD process.
+spring-api-employeapp - an example Java (Spring Boot API) app with DevSecOps included in CI/CD process.
 
 ## Table of contents
 - [Project name](#project-name)
@@ -13,10 +13,11 @@ spring-api-employeapp - example Spring Boot API application with CI/CD process.
 - [Usage](#usage)
 
 ## General info
-App is written basing on following howto:
+
+The app was written based on the following howto:
 https://www.javaguides.net/2019/01/springboot-postgresql-jpa-hibernate-crud-restful-api-tutorial.html
-In one of next iterations, to improve pipeline an examples of DevSecOps practices were added.
-Following analysis are performed. One of main requirements was to use tools that are easy available and free to use (or at least each one has free tier).
+The CI/CD process implements some DevSecOps practices / processes to ensure high quality and secure artifacts.
+Following analysis are performed:
 * SAST analysis using **Sonarqube**
 * Licence compliance analysis using **Fossa**
 * SCA analysis of Java package using **Trivy**
@@ -24,11 +25,12 @@ Following analysis are performed. One of main requirements was to use tools that
   * Currently stage is disabled because of issues: https://github.com/aquasecurity/trivy/discussions/5876
 * DAST scan using **OwaspZAP**
 
+One of the main requirements was to use tools that are easily available and free to use (or at least each has a free tier).
 Following guidelines might be useful to understand each analysis type: https://www.redhat.com/en/blog/application-analysis-devsecops-life-cycle
-
 Tool that is not mentioned here but seems to be most powerful package available on market is Checkmarx (https://checkmarx.com/product/application-security-platform/)
 
 ## Technologies
+
 * Backend: Java (SpringBoot)
 * Database: H2 (test) and PostgreSQL (prod)
 * CI/CD: Jenkins
